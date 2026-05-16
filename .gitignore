@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment — never commit real secrets
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Firebase / Google services
+android/app/google-services.json
+ios/App/App/GoogleService-Info.plist
+serviceAccount*.json
+*firebase-adminsdk*.json
+
+# Android signing
+*.keystore
+*.jks
+
+# Editor & OS
+.DS_Store
+.vscode/
+*.log

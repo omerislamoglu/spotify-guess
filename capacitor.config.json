@@ -1,0 +1,19 @@
+{
+  "appId": "com.spotifyguess.app",
+  "appName": "EchoGuess",
+  "webDir": "dist",
+  "ios": {
+    "contentInset": "automatic",
+    "allowsLinkPreview": false,
+    "webContentsDebuggingEnabled": false
+  },
+  "server": {
+    "allowNavigation": [
+      "*.spotify.com",
+      "*.scdn.co",
+      "*.apple.com",
+      "*.mzstatic.com",
+      "itunes.apple.com"
+    ]
+  }
+}
