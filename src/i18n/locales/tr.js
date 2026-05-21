@@ -194,4 +194,7 @@ export default {
   player_joined: '{name} odaya katıldı!',
   playlist_connected: '{name} bir çalma listesi bağladı!',
   game_started: 'Oyun başladı! Tahmin zamanı!',
+  error_spotify_session_expired: 'Spotify oturumun sona erdi. Lütfen tekrar bağlan.',
+  error_generic: 'Bir hata oluştu.',
+  error_spotify_auth: 'Spotify girişi başarısız oldu. Lütfen tekrar dene.',
 }

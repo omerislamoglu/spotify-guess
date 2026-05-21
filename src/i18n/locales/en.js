@@ -194,4 +194,7 @@ export default {
   player_joined: '{name} joined the room!',
   playlist_connected: '{name} connected a playlist!',
   game_started: 'Game started! Let the guessing begin!',
+  error_spotify_session_expired: 'Spotify session expired. Please reconnect.',
+  error_generic: 'Something went wrong.',
+  error_spotify_auth: 'Spotify login failed. Please try again.',
 }

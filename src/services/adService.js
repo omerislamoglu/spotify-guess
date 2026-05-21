@@ -18,15 +18,22 @@ let initialized = false
 // Defaults to test IDs for development.
 const IS_TESTING = import.meta.env.VITE_ADMOB_ENV !== 'production'
 
+function resolveAdId(envKey, testId) {
+  if (IS_TESTING) return testId
+  const id = import.meta.env[envKey] ?? ''
+  if (!id) console.warn(`[AdMob] ${envKey} is not set — ads will not load in production.`)
+  return id
+}
+
 const INTERSTITIAL_ID =
   Capacitor.getPlatform() === 'ios'
-    ? (IS_TESTING ? 'ca-app-pub-3940256099942544/4411468910' : (import.meta.env.VITE_ADMOB_INTERSTITIAL_IOS ?? ''))
-    : (IS_TESTING ? 'ca-app-pub-3940256099942544/1033173712' : (import.meta.env.VITE_ADMOB_INTERSTITIAL_ANDROID ?? ''))
+    ? resolveAdId('VITE_ADMOB_INTERSTITIAL_IOS', 'ca-app-pub-3940256099942544/4411468910')
+    : resolveAdId('VITE_ADMOB_INTERSTITIAL_ANDROID', 'ca-app-pub-3940256099942544/1033173712')
 
 const REWARDED_ID =
   Capacitor.getPlatform() === 'ios'
-    ? (IS_TESTING ? 'ca-app-pub-3940256099942544/1712485313' : (import.meta.env.VITE_ADMOB_REWARDED_IOS ?? ''))
-    : (IS_TESTING ? 'ca-app-pub-3940256099942544/5224354917' : (import.meta.env.VITE_ADMOB_REWARDED_ANDROID ?? ''))
+    ? resolveAdId('VITE_ADMOB_REWARDED_IOS', 'ca-app-pub-3940256099942544/1712485313')
+    : resolveAdId('VITE_ADMOB_REWARDED_ANDROID', 'ca-app-pub-3940256099942544/5224354917')
 
 /**
  * Initialize AdMob SDK. Safe to call multiple times — only runs once.

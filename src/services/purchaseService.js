@@ -20,8 +20,8 @@ import { PREMIUM_DIAMOND_REWARDS } from './energyService'
 
 // ── RevenueCat config ───────────────────────────────────────────────────────
 // Replace with your real API keys from https://app.revenuecat.com
-const REVENUECAT_IOS_KEY     = 'appl_hgXrJeEnuAypfNKiiKgNssXjSDv'
-const REVENUECAT_ANDROID_KEY = 'goog_YOUR_REVENUECAT_ANDROID_API_KEY'
+const REVENUECAT_IOS_KEY     = import.meta.env.VITE_REVENUECAT_IOS_KEY ?? ''
+const REVENUECAT_ANDROID_KEY = import.meta.env.VITE_REVENUECAT_ANDROID_KEY ?? ''
 
 const ENTITLEMENT_ID = 'premium'
 
@@ -54,8 +54,8 @@ export async function initPurchases(userId) {
       ? REVENUECAT_IOS_KEY
       : REVENUECAT_ANDROID_KEY
 
-    if (apiKey.includes('YOUR_REVENUECAT')) {
-      console.error('[RC] ⚠️  RevenueCat API key is still a placeholder. Replace it in purchaseService.js before testing purchases.')
+    if (!apiKey) {
+      console.warn('[RC] RevenueCat API key is not set. Add VITE_REVENUECAT_IOS_KEY / VITE_REVENUECAT_ANDROID_KEY to your .env file.')
       return
     }
 

@@ -79,7 +79,7 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
   const openPicker = useCallback(async () => {
     const token = await ensureFreshToken()
     if (!token) {
-      toast.error('Spotify session expired. Please reconnect.')
+      toast.error(t('error_spotify_session_expired'))
       navigate('/dashboard')
       return
     }
@@ -102,7 +102,7 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
     // Re-check freshness in case the token expired while the picker was open
     const token = await ensureFreshToken()
     if (!token) {
-      toast.error('Spotify session expired. Please reconnect.')
+      toast.error(t('error_spotify_session_expired'))
       setSyncing(false)
       navigate('/dashboard')
       return
@@ -110,8 +110,9 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
     try {
       await connectPlaylist(token, playlist.id, playlist.name)
       toast.success(`"${playlist.name}" connected!`)
-    } catch {
-      // Error is set in the store
+    } catch (err) {
+      console.error(err)
+      toast.error(t('error_generic'))
     } finally {
       setSyncing(false)
     }
@@ -340,7 +341,7 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
                 onClick={async () => {
                   setSyncing(true)
                   const token = await ensureFreshToken()
-                  if (!token) { toast.error('Spotify session expired.'); setSyncing(false); return }
+                  if (!token) { toast.error(t('error_spotify_session_expired')); setSyncing(false); return }
                   await connectRecentlyPlayed(token)
                   setSyncing(false)
                 }}
@@ -354,7 +355,7 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
                 onClick={async () => {
                   setSyncing(true)
                   const token = await ensureFreshToken()
-                  if (!token) { toast.error('Spotify session expired.'); setSyncing(false); return }
+                  if (!token) { toast.error(t('error_spotify_session_expired')); setSyncing(false); return }
                   await connectLikedSongs(token)
                   setSyncing(false)
                 }}
@@ -523,7 +524,8 @@ function FinishedView({ room }) {
   useEffect(() => {
     if (!adShown.current) {
       adShown.current = true
-      showInterstitial()
+      try { showInterstitial().catch(err => console.error('[Ad]', err)) }
+      catch (err) { console.error('[Ad]', err) }
     }
   }, [])
 

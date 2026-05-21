@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Music, Users, Headphones } from 'lucide-react'
+import toast from 'react-hot-toast'
 import useAuthStore from '../store/useAuthStore'
 import Button from '../components/ui/Button'
 import { t } from '../i18n'
@@ -24,6 +25,12 @@ export default function Login() {
     useAuthStore()
 
   useEffect(() => {
+    const authError = searchParams.get('error')
+    if (authError) {
+      toast.error(t('error_spotify_auth'))
+      return
+    }
+
     const code  = searchParams.get('code')
     const state = searchParams.get('state')
     if (code && state) {
@@ -47,16 +54,13 @@ export default function Login() {
     <div className="flex min-h-full flex-col items-center justify-center px-4 sm:px-5 py-8 sm:py-10">
 
       <div className="mb-6 sm:mb-8 text-center">
-        <div className="mx-auto mb-3 sm:mb-4 flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-green to-emerald-400 shadow-lg shadow-brand-green/25">
-          <svg viewBox="0 0 48 48" className="h-12 w-12" fill="none" aria-hidden>
-            <path d="M10 28c0-7.7 6.3-14 14-14" stroke="#000" strokeWidth="2.5" strokeLinecap="round" fill="none" opacity="0.4"/>
-            <path d="M6 30c0-11 8.9-20 20-20" stroke="#000" strokeWidth="2.5" strokeLinecap="round" fill="none" opacity="0.25"/>
-            <path d="M14 26c0-4.4 3.6-8 8-8" stroke="#000" strokeWidth="2.5" strokeLinecap="round" fill="none" opacity="0.55"/>
-            <circle cx="22" cy="30" r="4" fill="#000"/>
-            <rect x="25" y="17" width="2.5" height="13" rx="1.25" fill="#000"/>
-            <path d="M25.5 17c3.5 0 7 2 7 5.5" stroke="#000" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
-            <text x="35" y="40" fontFamily="system-ui" fontWeight="900" fontSize="16" fill="#000" opacity="0.7">?</text>
-          </svg>
+        <div className="mx-auto mb-3 sm:mb-4 flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center overflow-hidden rounded-3xl bg-black shadow-lg shadow-brand-green/25 ring-1 ring-white/10">
+          <img
+            src="/echoguess-app-icon.png"
+            alt=""
+            className="h-full w-full object-cover"
+            aria-hidden="true"
+          />
         </div>
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">{t('login_title')}</h1>
         <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm text-muted">
