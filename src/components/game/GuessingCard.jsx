@@ -239,21 +239,10 @@ export default function GuessingCard({
             src={round.track.albumArt}
             alt="Album art"
             className="h-full w-full object-cover"
-            style={{
-              filter:     infoVisible ? 'none' : 'blur(20px) brightness(0.45)',
-              transform:  infoVisible ? 'scale(1.0)' : 'scale(1.08)',
-              transition: 'filter 0.7s ease, transform 0.7s ease',
-            }}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center rounded-2xl bg-surface-2 text-6xl">
             🎵
-          </div>
-        )}
-        {!infoVisible && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-            <span className="text-3xl">🔒</span>
-            <span className="text-xs font-semibold text-white/70">{t('game_whose_song')}</span>
           </div>
         )}
       </div>
