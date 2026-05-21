@@ -39,7 +39,6 @@ export default function GuessingCard({
   onGuess,
   onReveal,
   onAdvance,
-  onSkip,
 }) {
   const audioRef                          = useRef(null)
   const [isPlaying,      setIsPlaying]    = useState(false)
@@ -121,7 +120,7 @@ export default function GuessingCard({
 
   // ── Auto-advance countdown visual ──────────────────────────────────────────
   useEffect(() => {
-    if (!revealed || round.skipped) {
+    if (!revealed) {
       setAdvanceCount(4)
       return
     }
@@ -131,7 +130,7 @@ export default function GuessingCard({
       setAdvanceCount(count => Math.max(1, count - 1))
     }, 1000)
     return () => clearInterval(interval)
-  }, [revealed, round.skipped, round.track.id])
+  }, [revealed, round.track.id])
 
   // ── Reset on round change ───────────────────────────────────────────────────
   useEffect(() => {
@@ -175,22 +174,13 @@ export default function GuessingCard({
     }
   }, [previewUrl])
 
-  // ── Try autoplay after the first round; mobile browsers may quietly block it.
+  // ── Try autoplay after the first round (host only) ─────────────────────────
   useEffect(() => {
-    if (roundIndex <= 0 || previewStatus !== 'ready' || !audioRef.current || round.revealed) return
+    if (!isHost || roundIndex <= 0 || previewStatus !== 'ready' || !audioRef.current || round.revealed) return
     audioRef.current.play()
       .then(() => setIsPlaying(true))
       .catch(() => {})
-  }, [previewStatus, roundIndex, round.revealed, round.track.id])
-
-  // ── Auto-skip unavailable previews from the host client ────────────────────
-  useEffect(() => {
-    if (!isHost || previewStatus !== 'unavailable' || round.revealed || round.skipped) return
-    const timeout = setTimeout(() => {
-      onSkip?.()
-    }, 3000)
-    return () => clearTimeout(timeout)
-  }, [isHost, onSkip, previewStatus, round.revealed, round.skipped, round.track.id])
+  }, [isHost, previewStatus, roundIndex, round.revealed, round.track.id])
 
   // ── Audio toggle ────────────────────────────────────────────────────────────
   const togglePlay = () => {
@@ -287,12 +277,14 @@ export default function GuessingCard({
       </div>
 
       {/* ── Audio player ───────────────────────────────────────────────────── */}
-      <audio
-        ref={audioRef}
-        onEnded={() => setIsPlaying(false)}
-        playsInline
-        preload="auto"
-      />
+      {isHost && (
+        <audio
+          ref={audioRef}
+          onEnded={() => setIsPlaying(false)}
+          playsInline
+          preload="auto"
+        />
+      )}
 
       <div className="flex items-center justify-center gap-4">
         {previewStatus === 'searching' ? (
@@ -301,9 +293,9 @@ export default function GuessingCard({
           </div>
         ) : previewStatus === 'unavailable' ? (
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-2 text-2xl">
-            ⏭
+            🔇
           </div>
-        ) : (
+        ) : isHost ? (
           <button
             onClick={togglePlay}
             className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-green text-black shadow-lg transition-all hover:brightness-110 active:scale-95"
@@ -311,6 +303,10 @@ export default function GuessingCard({
           >
             {isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" className="translate-x-0.5" />}
           </button>
+        ) : (
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-2">
+            <AudioVisualizer active={isPlaying} />
+          </div>
         )}
 
         <div className="w-28">
@@ -318,19 +314,21 @@ export default function GuessingCard({
             <span className="text-xs text-muted">{t('game_finding_clip')}</span>
           )}
           {previewStatus === 'unavailable' && (
-            <span className="text-xs text-muted">{t('game_no_preview_skip')}</span>
+            <span className="text-xs text-muted">{t('game_no_preview')}</span>
           )}
           {previewStatus === 'ready' && (
             isPlaying ? <AudioVisualizer active /> : (
               <span className="text-xs text-muted">
-                {roundIndex === 0 ? t('game_play_to_start') : t('game_preview')}
+                {isHost
+                  ? (roundIndex === 0 ? t('game_play_to_start') : t('game_preview'))
+                  : t('game_waiting_host')}
               </span>
             )
           )}
         </div>
       </div>
 
-      {!revealed && !round.skipped && (
+      {!revealed && (
         <p
           className={`text-center text-xs text-muted transition-transform duration-300 ${
             progressPulse ? 'scale-105 text-brand-green' : 'scale-100'
@@ -343,7 +341,7 @@ export default function GuessingCard({
       {/* ── Divider ─────────────────────────────────────────────────────────── */}
       <div className="border-t border-surface-2" />
 
-      {revealed && !round.skipped && (
+      {revealed && (
         <div className="flex items-center justify-center gap-3 rounded-xl border border-surface-2 px-4 py-3 text-sm text-muted">
           <span
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
@@ -445,15 +443,6 @@ export default function GuessingCard({
       {/* ── Host controls ──────────────────────────────────────────────────── */}
       {isHost && (
         <div className="space-y-2 pt-1">
-          {!revealed && (
-            <button
-              onClick={onSkip}
-              className="flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-surface-2 text-sm font-semibold text-muted transition-all hover:border-muted hover:text-white active:scale-[0.98]"
-            >
-              {t('game_skip_round')}
-            </button>
-          )}
-
           {!revealed ? (
             <button
               onClick={onReveal}

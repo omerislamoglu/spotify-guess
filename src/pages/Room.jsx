@@ -437,7 +437,7 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
 // ─── Playing phase ────────────────────────────────────────────────────────────
 
 function GameView({ room, currentUser, isHost, onLeave }) {
-  const { submitGuess, revealRound, advanceRound, skipRound } = useGameStore()
+  const { submitGuess, revealRound, advanceRound } = useGameStore()
 
   const rounds      = Array.isArray(room.rounds) ? room.rounds : []
   const roundIndex  = room.currentRound ?? 0
@@ -451,35 +451,19 @@ function GameView({ room, currentUser, isHost, onLeave }) {
       <div className="mx-auto w-full max-w-md space-y-3 sm:space-y-4">
 
         {/* Round header */}
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <p className="text-[10px] sm:text-xs uppercase tracking-widest text-muted">
               {t('game_round', { current: roundIndex + 1, total: rounds.length })}
             </p>
             <h1 className="text-base sm:text-xl font-bold">{t('game_whose_song')}</h1>
           </div>
-
-          {/* Live score strip + leave */}
-          <div className="flex max-w-full shrink min-w-0 items-center gap-3 overflow-x-auto snap-x snap-mandatory">
-            <div className="flex gap-2 shrink-0 snap-start">
-              {room.players.map(p => (
-                <div key={p.uid} className="flex flex-col items-center snap-start">
-                  <span className="text-xs font-bold text-brand-green">
-                    {room.scores?.[p.uid] ?? 0}
-                  </span>
-                  <span className="max-w-[44px] truncate text-center text-[9px] text-muted">
-                    {p.displayName?.split(' ')[0]}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={onLeave}
-              className="flex min-h-9 items-center rounded-full border border-surface-2 px-2.5 py-1 text-[10px] text-muted transition-colors hover:text-white active:scale-95"
-            >
-              {t('lobby_leave')}
-            </button>
-          </div>
+          <button
+            onClick={onLeave}
+            className="flex shrink-0 min-h-9 items-center rounded-full border border-surface-2 px-2.5 py-1 text-[10px] text-muted transition-colors hover:text-white active:scale-95"
+          >
+            {t('lobby_leave')}
+          </button>
         </div>
 
         {/* Progress bar */}
@@ -496,6 +480,46 @@ function GameView({ room, currentUser, isHost, onLeave }) {
           ))}
         </div>
 
+        {/* Live scoreboard */}
+        <div className="rounded-2xl border border-white/8 bg-white/4 px-3 py-2 space-y-1.5">
+          {[...room.players]
+            .map(p => ({ ...p, score: room.scores?.[p.uid] ?? 0 }))
+            .sort((a, b) => b.score - a.score)
+            .map((p, idx) => {
+              const isMe   = p.uid === currentUser.uid
+              const isFirst = idx === 0 && p.score > 0
+              return (
+                <div
+                  key={p.uid}
+                  className={`flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 transition-colors ${
+                    isFirst
+                      ? 'bg-brand-green/10 border border-brand-green/25'
+                      : isMe
+                        ? 'bg-white/5'
+                        : ''
+                  }`}
+                >
+                  <span className="w-4 shrink-0 text-center text-[10px] font-bold text-muted tabular-nums">
+                    {idx + 1}
+                  </span>
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                    isFirst
+                      ? 'bg-brand-green/25 text-brand-green ring-1 ring-brand-green/40'
+                      : 'bg-surface-2 text-white/60'
+                  }`}>
+                    {isFirst ? <Crown size={12} /> : p.displayName?.[0]?.toUpperCase()}
+                  </span>
+                  <span className={`min-w-0 flex-1 truncate text-xs font-medium ${isMe ? 'text-white' : 'text-white/70'}`}>
+                    {p.displayName}
+                  </span>
+                  <span className="shrink-0 text-xs font-bold tabular-nums text-brand-green transition-all">
+                    {p.score}
+                  </span>
+                </div>
+              )
+            })}
+        </div>
+
         <GuessingCard
           round={round}
           players={room.players}
@@ -506,7 +530,6 @@ function GameView({ room, currentUser, isHost, onLeave }) {
           onGuess={submitGuess}
           onReveal={revealRound}
           onAdvance={advanceRound}
-          onSkip={skipRound}
         />
       </div>
     </div>

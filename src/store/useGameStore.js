@@ -21,7 +21,6 @@ import {
   submitGuess      as fsSubmitGuess,
   revealRound      as fsRevealRound,
   advanceRound     as fsAdvanceRound,
-  skipRound        as fsSkipRound,
   MAX_TRACKS_PER_PLAYER,
   ROUND_COUNT,
   POINTS_CORRECT_GUESS,
@@ -400,23 +399,6 @@ const useGameStore = create((set, get) => ({
     }
   },
 
-  /**
-   * Skip the current round without scoring, marking it for final recap.
-   * Only the host should call this.
-   */
-  skipRound: async () => {
-    const { room } = get()
-    if (!room) return
-
-    const roundIndex = room.currentRound ?? 0
-    const nextIndex = roundIndex + 1
-    try {
-      await fsSkipRound(room.id, roundIndex, nextIndex, room.rounds.length)
-    } catch (err) {
-      set({ error: err.message })
-    }
-  },
-
   // ── Room lifecycle ─────────────────────────────────────────────────────────
 
   leaveRoom: async () => {
@@ -486,7 +468,7 @@ const useGameStore = create((set, get) => ({
         !round
       ) return
 
-      if (!round.revealed && !round.skipped && hasEveryVoterGuessed(roomData, round)) {
+      if (!round.revealed && hasEveryVoterGuessed(roomData, round)) {
         if (!autoRevealRounds.has(roundIndex)) {
           autoRevealRounds.add(roundIndex)
           scheduleTimer(`reveal:${roundIndex}`, AUTO_REVEAL_DELAY_MS, () => {
@@ -500,7 +482,6 @@ const useGameStore = create((set, get) => ({
               latest.currentRound === roundIndex &&
               latestRound &&
               !latestRound.revealed &&
-              !latestRound.skipped &&
               hasEveryVoterGuessed(latest, latestRound)
             ) {
               get().revealRound()
@@ -509,7 +490,7 @@ const useGameStore = create((set, get) => ({
         }
       }
 
-      if (round.revealed && !round.skipped) {
+      if (round.revealed) {
         if (!autoAdvanceRounds.has(roundIndex)) {
           autoAdvanceRounds.add(roundIndex)
           scheduleTimer(`advance:${roundIndex}`, AUTO_ADVANCE_DELAY_MS, () => {
@@ -521,8 +502,7 @@ const useGameStore = create((set, get) => ({
               latestUser?.uid === latest.hostId &&
               latest.phase === 'playing' &&
               latest.currentRound === roundIndex &&
-              latestRound?.revealed &&
-              !latestRound.skipped
+              latestRound?.revealed
             ) {
               get().advanceRound()
             }

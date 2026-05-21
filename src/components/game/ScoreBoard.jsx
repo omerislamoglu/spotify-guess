@@ -35,7 +35,7 @@ export default function ScoreBoard({ players, scores, rounds }) {
 
       {/* Winner / Draw banner */}
       <div className="rounded-2xl bg-gradient-to-br from-brand-green/20 to-surface border border-brand-green/30 p-5 sm:p-6 text-center">
-        <p className="text-3xl sm:text-4xl mb-2">{isDraw ? '🤝' : '����'}</p>
+        <p className="text-3xl sm:text-4xl mb-2">{isDraw ? '🤝' : '🏆'}</p>
         <p className="text-base sm:text-lg font-bold text-brand-green">
           {isDraw
             ? t('score_draw')

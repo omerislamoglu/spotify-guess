@@ -240,35 +240,6 @@ export async function advanceRound(roomId, nextIndex, totalRounds) {
   })
 }
 
-/**
- * Mark the current round as skipped, then advance in the same transaction.
- * Keeps skipped rounds visible in final recap without awarding points.
- */
-export async function skipRound(roomId, roundIndex, nextIndex, totalRounds) {
-  const roomRef = doc(db, ROOMS, roomId)
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(roomRef)
-    if (!snap.exists()) return
-
-    const data = snap.data()
-    if (data.phase !== 'playing' || data.currentRound !== roundIndex) return
-
-    const rounds = [...(data.rounds ?? [])]
-    if (!rounds[roundIndex] || rounds[roundIndex].revealed || rounds[roundIndex].skipped) return
-
-    rounds[roundIndex] = {
-      ...rounds[roundIndex],
-      skipped: true,
-    }
-
-    tx.update(roomRef, {
-      rounds,
-      currentRound: nextIndex,
-      phase: nextIndex >= totalRounds ? 'finished' : 'playing',
-    })
-  })
-}
-
 // ─── Gold Award ──────────────────────────────────────────────────────────────
 
 /**
