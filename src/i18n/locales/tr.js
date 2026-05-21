@@ -26,6 +26,7 @@ export default {
   dash_go_premium: 'Premium Ol',
   dash_premium_desc: 'Elmas + reklamsız',
   dash_upgrade: 'Yükselt →',
+  dash_room_failed_refund: 'Bir sorun oluştu — enerji iade edildi.',
   dash_signed_out: 'Çıkış yapıldı. Tekrar görüşmek üzere!',
 
   // ── Room code ──────────────────────────────────────────────────────────────
@@ -46,7 +47,6 @@ export default {
   lobby_no_playlist: 'Henüz liste yok',
   lobby_host: 'ev sahibi',
   lobby_connected: 'Bağlandı ✓',
-  lobby_tracks: '{name} · {count} parça',
   lobby_see_tracks: 'Parçaları gör',
   lobby_hide: 'Gizle',
   lobby_change: 'Değiştir',
@@ -56,10 +56,13 @@ export default {
   lobby_liked_songs: 'Beğenilen Şarkıları Kullan',
   lobby_rounds: 'Turlar',
   lobby_start_game: 'Oyunu Başlat — {count} tur',
+  lobby_fewer_rounds: 'Yeterli benzersiz şarkı yok — sadece {count} tur oluşturuldu.',
   lobby_building: 'Turlar hazırlanıyor...',
   lobby_waiting_host: 'Ev sahibinin oyunu başlatması bekleniyor...',
   lobby_invite_text: "EchoGuess odama katıl! Kod: {code}",
   lobby_invite_copied: 'Davet linki kopyalandı!',
+  lobby_need_host_playlist: 'Önce kendi listeni bağla',
+  lobby_need_players: 'En az 2 oyuncuya ihtiyaç var',
 
   // ── Game ────────────────────────────────────────────────────────────────────
   game_round: 'Tur {current} / {total}',
@@ -82,10 +85,18 @@ export default {
   game_waiting_host: 'Ev sahibinin devam etmesi bekleniyor...',
   game_finding_clip: 'Klip aranıyor...',
   game_no_preview: 'Ses önizlemesi yok',
+  game_no_preview_skip: 'Bu şarkının önizlemesi yok — host atlayacak',
   game_preview: '30sn önizleme',
+  game_aria_play: 'Önizlemeyi oynat',
+  game_aria_pause: 'Önizlemeyi duraklat',
+  game_auto_next: 'Sonraki tur {count}...',
+  game_skip_round: 'Turu Atla',
+  game_progress: '{done}/{total} oyuncu tahmin etti',
+  game_play_to_start: 'Başlamak için oynat',
   game_perfect: '+{pts} puan! Mükemmel tahmin',
   game_partial: '+{pts} puan! {correct} doğru, {wrong} yanlış',
   game_zero: 'Çok fazla yanlış — 0 puan. Cevap {names} idi',
+  game_zero_detail: 'Çok fazla yanlış — net 0 puan (kazanılan {correctPts}, kaybedilen {wrongPts})',
   game_wrong: 'Yanlış — {names} idi!',
   game_from_playlist: '♪ {names} listesinden',
 

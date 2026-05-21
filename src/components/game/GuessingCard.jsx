@@ -3,6 +3,7 @@ import { Play, Pause, Lock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { t } from '../../i18n'
 import { fetchItunesPreview } from '../../services/spotifyService'
+import { POINTS_CORRECT_GUESS, POINTS_WRONG_GUESS } from '../../services/gameService'
 
 // ─── CSS Audio Visualizer ─────────────────────────────────────────────────────
 
@@ -33,20 +34,25 @@ export default function GuessingCard({
   players,
   currentUserId,
   isHost,
+  roundIndex,
   isLastRound,
   onGuess,
   onReveal,
   onAdvance,
+  onSkip,
 }) {
   const audioRef                          = useRef(null)
   const [isPlaying,      setIsPlaying]    = useState(false)
   const [revealed,       setRevealed]     = useState(false)
+  const [advanceCount,   setAdvanceCount] = useState(4)
   const [previewUrl,     setPreviewUrl]   = useState(round.track.previewUrl)
   const [previewStatus,  setPreviewStatus] = useState(
     round.track.previewUrl ? 'ready' : 'searching'
   )
   const [selected,       setSelected]     = useState(new Set())
+  const [progressPulse,  setProgressPulse] = useState(false)
   const toastFiredRef                     = useRef(false)
+  const prevGuessedCountRef               = useRef(0)
 
   // Backward compat: ownerIds (new) or [ownerId] (old)
   const ownerIds = round.ownerIds ?? (round.ownerId ? [round.ownerId] : [])
@@ -59,12 +65,13 @@ export default function GuessingCard({
   // Parse guess — could be array (new) or string (old)
   const myGuesses  = Array.isArray(myGuess) ? myGuess : myGuess ? [myGuess] : []
 
-  // Track info visible once the user has guessed, round is revealed,
-  // OR no audio preview exists (show track name so players can still guess).
-  const infoVisible = hasGuessed || revealed || previewStatus === 'unavailable'
+  // Track info stays hidden when a preview is unavailable; that round is skipped.
+  const infoVisible = hasGuessed || revealed
 
   const voters   = players.filter(p => !ownerSet.has(p.uid))
   const allVoted = voters.length > 0 && voters.every(p => round.guesses?.[p.uid] != null)
+  const voterCount = Math.max(0, players.length - ownerIds.length)
+  const guessedCount = Object.keys(round.guesses ?? {}).filter(uid => !ownerSet.has(uid)).length
 
   // ── Sync revealed from Firestore with a small delay for CSS transition ──────
   useEffect(() => {
@@ -84,7 +91,9 @@ export default function GuessingCard({
       toastFiredRef.current = true
       const correctCount = myGuesses.filter(g => ownerSet.has(g)).length
       const wrongCount   = myGuesses.filter(g => !ownerSet.has(g)).length
-      const pts          = Math.max(0, correctCount * 100 - wrongCount * 50)
+      const correctPts   = correctCount * POINTS_CORRECT_GUESS
+      const wrongPts     = wrongCount * Math.abs(POINTS_WRONG_GUESS)
+      const pts          = correctPts - wrongPts
 
       if (correctCount > 0 && wrongCount === 0) {
         toast.success(t('game_perfect', { pts }), { duration: 4000 })
@@ -92,10 +101,7 @@ export default function GuessingCard({
         toast.success(t('game_partial', { pts, correct: correctCount, wrong: wrongCount }), { duration: 4000 })
       } else if (correctCount > 0) {
         // Had correct picks but too many wrong ones cancelled them out
-        const ownerNames = ownerIds
-          .map(id => players.find(p => p.uid === id)?.displayName)
-          .filter(Boolean).join(' & ')
-        toast(t('game_zero', { names: ownerNames }), { duration: 4000 })
+        toast(t('game_zero_detail', { correctPts, wrongPts }), { duration: 4000 })
       } else if (myGuesses.length > 0) {
         const ownerNames = ownerIds
           .map(id => players.find(p => p.uid === id)?.displayName)
@@ -113,12 +119,38 @@ export default function GuessingCard({
     }
   }, [round.revealed])
 
+  // ── Auto-advance countdown visual ──────────────────────────────────────────
+  useEffect(() => {
+    if (!revealed || round.skipped) {
+      setAdvanceCount(4)
+      return
+    }
+
+    setAdvanceCount(4)
+    const interval = setInterval(() => {
+      setAdvanceCount(count => Math.max(1, count - 1))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [revealed, round.skipped, round.track.id])
+
   // ── Reset on round change ───────────────────────────────────────────────────
   useEffect(() => {
     setIsPlaying(false)
     setSelected(new Set())
+    prevGuessedCountRef.current = 0
     return () => { audioRef.current?.pause() }
   }, [round.track.id])
+
+  // ── Pulse live guess progress when another voter locks in ──────────────────
+  useEffect(() => {
+    if (guessedCount > prevGuessedCountRef.current) {
+      setProgressPulse(true)
+      const timeout = setTimeout(() => setProgressPulse(false), 420)
+      prevGuessedCountRef.current = guessedCount
+      return () => clearTimeout(timeout)
+    }
+    prevGuessedCountRef.current = guessedCount
+  }, [guessedCount])
 
   // ── Resolve preview URL (Spotify first, iTunes fallback) ────────────────────
   useEffect(() => {
@@ -143,7 +175,22 @@ export default function GuessingCard({
     }
   }, [previewUrl])
 
-  // Auto-skip removed — host uses manual "Skip Round" button instead.
+  // ── Try autoplay after the first round; mobile browsers may quietly block it.
+  useEffect(() => {
+    if (roundIndex <= 0 || previewStatus !== 'ready' || !audioRef.current || round.revealed) return
+    audioRef.current.play()
+      .then(() => setIsPlaying(true))
+      .catch(() => {})
+  }, [previewStatus, roundIndex, round.revealed, round.track.id])
+
+  // ── Auto-skip unavailable previews from the host client ────────────────────
+  useEffect(() => {
+    if (!isHost || previewStatus !== 'unavailable' || round.revealed || round.skipped) return
+    const timeout = setTimeout(() => {
+      onSkip?.()
+    }, 3000)
+    return () => clearTimeout(timeout)
+  }, [isHost, onSkip, previewStatus, round.revealed, round.skipped, round.track.id])
 
   // ── Audio toggle ────────────────────────────────────────────────────────────
   const togglePlay = () => {
@@ -260,7 +307,7 @@ export default function GuessingCard({
           <button
             onClick={togglePlay}
             className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-green text-black shadow-lg transition-all hover:brightness-110 active:scale-95"
-            aria-label={isPlaying ? 'Pause preview' : 'Play preview'}
+            aria-label={isPlaying ? t('game_aria_pause') : t('game_aria_play')}
           >
             {isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" className="translate-x-0.5" />}
           </button>
@@ -271,22 +318,50 @@ export default function GuessingCard({
             <span className="text-xs text-muted">{t('game_finding_clip')}</span>
           )}
           {previewStatus === 'unavailable' && (
-            <span className="text-xs text-muted">No audio preview</span>
+            <span className="text-xs text-muted">{t('game_no_preview_skip')}</span>
           )}
           {previewStatus === 'ready' && (
-            isPlaying ? <AudioVisualizer active /> : <span className="text-xs text-muted">30s preview</span>
+            isPlaying ? <AudioVisualizer active /> : (
+              <span className="text-xs text-muted">
+                {roundIndex === 0 ? t('game_play_to_start') : t('game_preview')}
+              </span>
+            )
           )}
         </div>
       </div>
 
+      {!revealed && !round.skipped && (
+        <p
+          className={`text-center text-xs text-muted transition-transform duration-300 ${
+            progressPulse ? 'scale-105 text-brand-green' : 'scale-100'
+          }`}
+        >
+          {t('game_progress', { done: guessedCount, total: voterCount })}
+        </p>
+      )}
+
       {/* ── Divider ─────────────────────────────────────────────────────────── */}
       <div className="border-t border-surface-2" />
+
+      {revealed && !round.skipped && (
+        <div className="flex items-center justify-center gap-3 rounded-xl border border-surface-2 px-4 py-3 text-sm text-muted">
+          <span
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+            style={{
+              background: `conic-gradient(rgb(29 185 84) ${(advanceCount / 4) * 360}deg, rgb(40 40 40) 0deg)`,
+            }}
+          >
+            {advanceCount}
+          </span>
+          <span>{t('game_auto_next', { count: advanceCount })}</span>
+        </div>
+      )}
 
       {/* ── Owner waiting state ────────────────────────────────────────────── */}
       {isOwner && !revealed && (
         <div className="rounded-xl bg-surface-2 px-4 py-3 text-center">
-          <p className="text-sm font-medium">This is your song!</p>
-          <p className="mt-0.5 text-xs text-muted">Sit tight while others guess…</p>
+          <p className="text-sm font-medium">{t('game_your_song')}</p>
+          <p className="mt-0.5 text-xs text-muted">{t('game_sit_tight')}</p>
         </div>
       )}
 
@@ -295,10 +370,10 @@ export default function GuessingCard({
         <div className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted">
             {revealed
-              ? 'Results'
+              ? t('game_results')
               : hasGuessed
-                ? 'Your guess'
-                : 'Who does this belong to? (select one or more)'}
+                ? t('game_your_guess')
+                : t('game_select_prompt')}
           </p>
 
           {players.map(player => {
@@ -330,11 +405,11 @@ export default function GuessingCard({
 
                 {revealed ? (
                   ownerSet.has(player.uid) ? (
-                    <span className="ml-2 shrink-0 text-xs font-semibold text-brand-green">Owner ✓</span>
+                    <span className="ml-2 shrink-0 text-xs font-semibold text-brand-green">{t('game_owner')}</span>
                   ) : null
                 ) : hasGuessed && guesserCount > 0 ? (
                   <span className="ml-2 shrink-0 text-xs text-muted">
-                    {guesserCount} vote{guesserCount > 1 ? 's' : ''}
+                    {t('game_votes', { count: guesserCount })}
                   </span>
                 ) : null}
               </button>
@@ -354,14 +429,14 @@ export default function GuessingCard({
             >
               <Lock size={14} />
               {selected.size === 0
-                ? 'Select at least one player'
-                : `Lock In (${selected.size} selected)`}
+                ? t('game_select_one')
+                : t('game_lock_in', { count: selected.size })}
             </button>
           )}
 
           {hasGuessed && !revealed && (
             <p className="pt-1 text-center text-xs text-brand-green">
-              Guess locked in — waiting for others…
+              {t('game_locked')}
             </p>
           )}
         </div>
@@ -370,6 +445,15 @@ export default function GuessingCard({
       {/* ── Host controls ──────────────────────────────────────────────────── */}
       {isHost && (
         <div className="space-y-2 pt-1">
+          {!revealed && (
+            <button
+              onClick={onSkip}
+              className="flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-surface-2 text-sm font-semibold text-muted transition-all hover:border-muted hover:text-white active:scale-[0.98]"
+            >
+              {t('game_skip_round')}
+            </button>
+          )}
+
           {!revealed ? (
             <button
               onClick={onReveal}
@@ -379,14 +463,14 @@ export default function GuessingCard({
                   : 'border border-surface-2 text-muted hover:border-muted hover:text-white'
               }`}
             >
-              {allVoted ? 'Reveal Answer' : 'Force Reveal'}
+              {allVoted ? t('game_reveal') : t('game_force_reveal')}
             </button>
           ) : (
             <button
               onClick={onAdvance}
               className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-brand-green text-sm font-semibold text-black transition-all hover:brightness-110 active:scale-[0.98]"
             >
-              {isLastRound ? 'See Final Scores →' : 'Next Round →'}
+              {isLastRound ? t('game_see_scores') : t('game_next_round')}
             </button>
           )}
         </div>
@@ -394,7 +478,7 @@ export default function GuessingCard({
 
       {!isHost && revealed && (
         <p className="text-center text-xs text-muted">
-          {isLastRound ? 'Game over!' : 'Waiting for host to continue…'}
+          {isLastRound ? t('game_over') : t('game_waiting_host')}
         </p>
       )}
     </div>

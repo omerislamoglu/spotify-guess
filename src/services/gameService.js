@@ -62,8 +62,27 @@ function generateJoinCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase()
 }
 
+/**
+ * Generate a join code that isn't already used by an active (lobby/playing) room.
+ * Retries up to 5 times to avoid collisions.
+ */
+async function generateUniqueJoinCode() {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = generateJoinCode()
+    const q    = query(
+      collection(db, ROOMS),
+      where('code', '==', code),
+      where('phase', 'in', ['lobby', 'playing'])
+    )
+    const snap = await getDocs(q)
+    if (snap.empty) return code
+  }
+  // Extremely unlikely — fall back to a longer code
+  return generateJoinCode() + generateJoinCode().slice(0, 2)
+}
+
 export async function createRoom(host) {
-  const code = generateJoinCode()
+  const code = await generateUniqueJoinCode()
   const ref  = await addDoc(collection(db, ROOMS), {
     hostId:          host.uid,
     code,
@@ -97,23 +116,42 @@ export async function joinRoom(code, player) {
 
 /**
  * Remove a player from the room's players array and delete their playlist entry.
+ * Uses a transaction for atomic read-modify-write.
+ *   - If the room becomes empty, deletes the document (no ghost rooms).
+ *   - If the leaving player was the host, transfers host to the next player.
+ *
+ * @returns {{ closed: boolean }} — true if the room was deleted.
  */
 export async function leaveRoom(roomId, uid) {
-  const roomRef  = doc(db, ROOMS, roomId)
-  const snapshot = await getDoc(roomRef)
-  if (!snapshot.exists()) return
+  const roomRef = doc(db, ROOMS, roomId)
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef)
+    if (!snap.exists()) return { closed: false }
 
-  const room           = snapshot.data()
-  const updatedPlayers = room.players.filter(p => p.uid !== uid)
+    const room           = snap.data()
+    const updatedPlayers = room.players.filter(p => p.uid !== uid)
 
-  const updates = { players: updatedPlayers }
+    // Last player — delete the room to avoid ghost rooms
+    if (updatedPlayers.length === 0) {
+      tx.delete(roomRef)
+      return { closed: true }
+    }
 
-  // Remove their playlist entry if present
-  if (room.playerPlaylists?.[uid]) {
-    updates[`playerPlaylists.${uid}`] = deleteField()
-  }
+    const updates = { players: updatedPlayers }
 
-  await updateDoc(roomRef, updates)
+    // Remove their playlist entry if present
+    if (room.playerPlaylists?.[uid]) {
+      updates[`playerPlaylists.${uid}`] = deleteField()
+    }
+
+    // If the leaving player was the host, transfer to the next player
+    if (room.hostId === uid) {
+      updates.hostId = updatedPlayers[0].uid
+    }
+
+    tx.update(roomRef, updates)
+    return { closed: false }
+  })
 }
 
 /**
@@ -185,7 +223,8 @@ export async function revealRound(roomId, roundIndex, scoreIncrements) {
 
     const scores = { ...(data.scores ?? {}) }
     for (const [uid, pts] of Object.entries(scoreIncrements)) {
-      scores[uid] = (scores[uid] ?? 0) + pts
+      // Skor 0'ın altına düşmesin — moral kırmasın.
+      scores[uid] = Math.max(0, (scores[uid] ?? 0) + pts)
     }
     tx.update(roomRef, { rounds, scores })
   })
@@ -198,6 +237,53 @@ export async function advanceRound(roomId, nextIndex, totalRounds) {
   await updateDoc(doc(db, ROOMS, roomId), {
     currentRound: nextIndex,
     phase:        nextIndex >= totalRounds ? 'finished' : 'playing',
+  })
+}
+
+/**
+ * Mark the current round as skipped, then advance in the same transaction.
+ * Keeps skipped rounds visible in final recap without awarding points.
+ */
+export async function skipRound(roomId, roundIndex, nextIndex, totalRounds) {
+  const roomRef = doc(db, ROOMS, roomId)
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef)
+    if (!snap.exists()) return
+
+    const data = snap.data()
+    if (data.phase !== 'playing' || data.currentRound !== roundIndex) return
+
+    const rounds = [...(data.rounds ?? [])]
+    if (!rounds[roundIndex] || rounds[roundIndex].revealed || rounds[roundIndex].skipped) return
+
+    rounds[roundIndex] = {
+      ...rounds[roundIndex],
+      skipped: true,
+    }
+
+    tx.update(roomRef, {
+      rounds,
+      currentRound: nextIndex,
+      phase: nextIndex >= totalRounds ? 'finished' : 'playing',
+    })
+  })
+}
+
+// ─── Gold Award ──────────────────────────────────────────────────────────────
+
+/**
+ * Atomically mark that the winner's gold has been awarded for this room.
+ * Returns true if this call was the one that set the flag (i.e. first caller wins).
+ * Returns false if gold was already awarded.
+ */
+export async function markGoldAwarded(roomId) {
+  const roomRef = doc(db, ROOMS, roomId)
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef)
+    if (!snap.exists()) return false
+    if (snap.data().goldAwarded) return false
+    tx.update(roomRef, { goldAwarded: true })
+    return true
   })
 }
 

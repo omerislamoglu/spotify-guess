@@ -10,6 +10,7 @@
 
 import { create } from 'zustand'
 import toast from 'react-hot-toast'
+import { t } from '../i18n'
 import {
   createRoom,
   joinRoom,
@@ -20,6 +21,7 @@ import {
   submitGuess      as fsSubmitGuess,
   revealRound      as fsRevealRound,
   advanceRound     as fsAdvanceRound,
+  skipRound        as fsSkipRound,
   MAX_TRACKS_PER_PLAYER,
   ROUND_COUNT,
   POINTS_CORRECT_GUESS,
@@ -27,6 +29,19 @@ import {
 } from '../services/gameService'
 import { fetchPlaylistTracks, fetchRecentlyPlayedTracks, fetchLikedTracks } from '../services/spotifyService'
 import useAuthStore from './useAuthStore'
+
+const AUTO_REVEAL_DELAY_MS = 800
+const AUTO_ADVANCE_DELAY_MS = 4000
+
+function getOwnerIds(round) {
+  return round?.ownerIds ?? (round?.ownerId ? [round.ownerId] : [])
+}
+
+function hasEveryVoterGuessed(room, round) {
+  const ownerSet = new Set(getOwnerIds(round))
+  const voters = (room.players ?? []).filter(p => !ownerSet.has(p.uid))
+  return voters.length > 0 && voters.every(p => round.guesses?.[p.uid] != null)
+}
 
 // ─── Fisher-Yates shuffle (in-place) ─────────────────────────────────────────
 function shuffle(arr) {
@@ -40,20 +55,25 @@ function shuffle(arr) {
 /**
  * Build the rounds array from the playerPlaylists map stored in Firestore.
  *
- * Fairness guarantee:
- *  Each player gets an equal number of round slots (ROUND_COUNT / numPlayers).
- *  Remainder slots are randomly assigned. Tracks within each player's pool are
- *  shuffled independently so no playlist-order bias creeps in.
+ * Guarantees:
+ *  - Result length = min(roundCount, totalUniqueTracks).
+ *  - Round-robin quota across players: each player contributes roughly the
+ *    same number of tracks. When a player runs out, the slot passes to the
+ *    next player who still has tracks.
+ *  - Post-shuffle de-dup: consecutive rounds with the same ownerSet are
+ *    swapped with the next differing round when possible.
  */
 function buildRounds(playerPlaylists, roundCount = ROUND_COUNT) {
+  // (a) Build per-player shuffled track pools & global ownershipMap
   const players = Object.entries(playerPlaylists).map(([uid, { tracks }]) => ({
     uid,
     tracks: shuffle([...tracks]),
+    cursor: 0,                       // index of next unused track
   }))
 
   if (players.length === 0) return []
 
-  // Track shared ownership: trackId → Set<uid>
+  // trackId → Set<uid>  (shared ownership across playlists)
   const ownershipMap = new Map()
   for (const p of players) {
     for (const track of p.tracks) {
@@ -62,43 +82,26 @@ function buildRounds(playerPlaylists, roundCount = ROUND_COUNT) {
     }
   }
 
-  // Randomise who gets the extra slot(s) when roundCount isn't evenly divisible
+  // Randomise starting order so the "first" player isn't deterministic
   shuffle(players)
 
-  const baseCount = Math.floor(roundCount / players.length)
-  let remainder   = roundCount % players.length
-
-  const allocation = new Map()
-  for (const p of players) {
-    const want = baseCount + (remainder > 0 ? 1 : 0)
-    if (remainder > 0) remainder--
-    allocation.set(p.uid, Math.min(want, p.tracks.length))
-  }
-
-  let total = [...allocation.values()].reduce((a, b) => a + b, 0)
-  if (total < roundCount) {
-    for (const p of players) {
-      const cur    = allocation.get(p.uid)
-      const canAdd = p.tracks.length - cur
-      if (canAdd > 0) {
-        const add = Math.min(canAdd, roundCount - total)
-        allocation.set(p.uid, cur + add)
-        total += add
-        if (total >= roundCount) break
-      }
-    }
-  }
-
+  // (b) Round-robin selection
   const usedTrackIds = new Set()
-  const rounds = []
-  for (const p of players) {
-    const count = allocation.get(p.uid)
-    let picked  = 0
-    for (const track of p.tracks) {
-      if (picked >= count) break
-      if (usedTrackIds.has(track.id)) continue
-      usedTrackIds.add(track.id)
+  const rounds       = []
+  let playerIdx      = 0
+  let emptyStreak    = 0         // consecutive players with no remaining tracks
 
+  while (rounds.length < roundCount && emptyStreak < players.length) {
+    const p = players[playerIdx % players.length]
+
+    // Find the next unused track for this player
+    let picked = false
+    while (p.cursor < p.tracks.length) {
+      const track = p.tracks[p.cursor]
+      p.cursor++
+      if (usedTrackIds.has(track.id)) continue   // duplicate across playlists
+
+      usedTrackIds.add(track.id)
       rounds.push({
         track: {
           id:         track.id,
@@ -111,11 +114,48 @@ function buildRounds(playerPlaylists, roundCount = ROUND_COUNT) {
         guesses:  {},
         revealed: false,
       })
-      picked++
+      picked = true
+      break
+    }
+
+    if (picked) {
+      emptyStreak = 0
+    } else {
+      emptyStreak++              // this player is exhausted — skip
+    }
+
+    playerIdx++
+  }
+
+  // (d) Shuffle the final list
+  shuffle(rounds)
+
+  // (3) Sliding-window de-dup: avoid consecutive identical ownerSets
+  for (let i = 1; i < rounds.length; i++) {
+    const prevKey = rounds[i - 1].ownerIds.slice().sort().join(',')
+    const currKey = rounds[i].ownerIds.slice().sort().join(',')
+    if (prevKey === currKey) {
+      // Try to swap with the nearest non-matching round ahead
+      for (let j = i + 1; j < rounds.length; j++) {
+        const candKey = rounds[j].ownerIds.slice().sort().join(',')
+        if (candKey !== currKey) {
+          ;[rounds[i], rounds[j]] = [rounds[j], rounds[i]]
+          break
+        }
+      }
+      // If no swap candidate found, accept the collision silently
     }
   }
 
-  shuffle(rounds)
+  // Debug log for testing
+  const perPlayer = {}
+  for (const r of rounds) {
+    for (const uid of r.ownerIds) {
+      perPlayer[uid] = (perPlayer[uid] ?? 0) + 1
+    }
+  }
+  console.debug('[buildRounds]', { requested: roundCount, built: rounds.length, perPlayer })
+
   return rounds
 }
 
@@ -126,6 +166,9 @@ const useGameStore = create((set, get) => ({
   loading:      false,
   error:        null,
   _unsubscribe: null,
+  _autoRevealRounds: new Set(),
+  _autoAdvanceRounds: new Set(),
+  _autoTimers: new Map(),
 
   // ── Lobby ──────────────────────────────────────────────────────────────────
 
@@ -279,6 +322,10 @@ const useGameStore = create((set, get) => ({
       return
     }
 
+    if (rounds.length < roundCount) {
+      toast(t('lobby_fewer_rounds', { count: rounds.length }), { duration: 5000 })
+    }
+
     set({ loading: true, error: null })
     try {
       await fsStartGame(room.id, rounds)
@@ -325,7 +372,7 @@ const useGameStore = create((set, get) => ({
       for (const g of guesses) {
         pts += ownerSet.has(g) ? POINTS_CORRECT_GUESS : POINTS_WRONG_GUESS
       }
-      if (pts > 0) increments[uid] = pts
+      if (pts !== 0) increments[uid] = pts
     }
 
     set({ loading: true })
@@ -353,21 +400,53 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+  /**
+   * Skip the current round without scoring, marking it for final recap.
+   * Only the host should call this.
+   */
+  skipRound: async () => {
+    const { room } = get()
+    if (!room) return
+
+    const roundIndex = room.currentRound ?? 0
+    const nextIndex = roundIndex + 1
+    try {
+      await fsSkipRound(room.id, roundIndex, nextIndex, room.rounds.length)
+    } catch (err) {
+      set({ error: err.message })
+    }
+  },
+
   // ── Room lifecycle ─────────────────────────────────────────────────────────
 
   leaveRoom: async () => {
-    const { room, _unsubscribe } = get()
+    const { room, _unsubscribe, _autoTimers } = get()
     const { firebaseUser } = useAuthStore.getState()
 
     // Unsubscribe first so the local listener doesn't react to our own removal
     if (_unsubscribe) _unsubscribe()
+    for (const timer of _autoTimers.values()) clearTimeout(timer)
 
     // Remove the player from Firestore so other players see them leave
     if (room?.id && firebaseUser?.uid) {
-      await fsLeaveRoom(room.id, firebaseUser.uid).catch(() => {})
+      try {
+        const { closed } = await fsLeaveRoom(room.id, firebaseUser.uid)
+        // closed === true → room was deleted (last player left); no extra toast needed
+        void closed
+      } catch {
+        // best-effort — player is already navigating away
+      }
     }
 
-    set({ room: null, loading: false, error: null, _unsubscribe: null })
+    set({
+      room: null,
+      loading: false,
+      error: null,
+      _unsubscribe: null,
+      _autoRevealRounds: new Set(),
+      _autoAdvanceRounds: new Set(),
+      _autoTimers: new Map(),
+    })
   },
 
   clearError: () => set({ error: null }),
@@ -378,8 +457,80 @@ const useGameStore = create((set, get) => ({
     const { _unsubscribe } = get()
     if (_unsubscribe) _unsubscribe()
 
-    const unsub = listenToRoom(roomId, roomData => set({ room: roomData }))
-    set({ _unsubscribe: unsub })
+    for (const timer of get()._autoTimers.values()) clearTimeout(timer)
+
+    const autoRevealRounds = new Set()
+    const autoAdvanceRounds = new Set()
+    const autoTimers = new Map()
+
+    const scheduleTimer = (key, delay, callback) => {
+      if (autoTimers.has(key)) return
+      const timer = setTimeout(() => {
+        autoTimers.delete(key)
+        callback()
+      }, delay)
+      autoTimers.set(key, timer)
+    }
+
+    const unsub = listenToRoom(roomId, roomData => {
+      set({ room: roomData })
+
+      const { firebaseUser } = useAuthStore.getState()
+      const roundIndex = roomData.currentRound ?? 0
+      const round = roomData.rounds?.[roundIndex]
+
+      if (
+        !firebaseUser ||
+        roomData.hostId !== firebaseUser.uid ||
+        roomData.phase !== 'playing' ||
+        !round
+      ) return
+
+      if (!round.revealed && !round.skipped && hasEveryVoterGuessed(roomData, round)) {
+        if (!autoRevealRounds.has(roundIndex)) {
+          autoRevealRounds.add(roundIndex)
+          scheduleTimer(`reveal:${roundIndex}`, AUTO_REVEAL_DELAY_MS, () => {
+            const { room: latest } = get()
+            const { firebaseUser: latestUser } = useAuthStore.getState()
+            const latestRound = latest?.rounds?.[roundIndex]
+            if (
+              latest?.id === roomId &&
+              latestUser?.uid === latest.hostId &&
+              latest.phase === 'playing' &&
+              latest.currentRound === roundIndex &&
+              latestRound &&
+              !latestRound.revealed &&
+              !latestRound.skipped &&
+              hasEveryVoterGuessed(latest, latestRound)
+            ) {
+              get().revealRound()
+            }
+          })
+        }
+      }
+
+      if (round.revealed && !round.skipped) {
+        if (!autoAdvanceRounds.has(roundIndex)) {
+          autoAdvanceRounds.add(roundIndex)
+          scheduleTimer(`advance:${roundIndex}`, AUTO_ADVANCE_DELAY_MS, () => {
+            const { room: latest } = get()
+            const { firebaseUser: latestUser } = useAuthStore.getState()
+            const latestRound = latest?.rounds?.[roundIndex]
+            if (
+              latest?.id === roomId &&
+              latestUser?.uid === latest.hostId &&
+              latest.phase === 'playing' &&
+              latest.currentRound === roundIndex &&
+              latestRound?.revealed &&
+              !latestRound.skipped
+            ) {
+              get().advanceRound()
+            }
+          })
+        }
+      }
+    })
+    set({ _unsubscribe: unsub, _autoRevealRounds: autoRevealRounds, _autoAdvanceRounds: autoAdvanceRounds, _autoTimers: autoTimers })
   },
 }))
 

@@ -6,6 +6,7 @@ import useGameStore from '../store/useGameStore'
 import useAuthStore from '../store/useAuthStore'
 import useEnergyStore from '../store/useEnergyStore'
 import { GOLD_PER_WIN } from '../services/energyService'
+import { markGoldAwarded, leaveRoom as fsLeaveRoom } from '../services/gameService'
 import GuessingCard from '../components/game/GuessingCard'
 import PlaylistPicker from '../components/game/PlaylistPicker'
 import ScoreBoard from '../components/game/ScoreBoard'
@@ -87,7 +88,13 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
 
   const myPlaylist    = room.playerPlaylists?.[currentUser.uid]
   const connectedUids = Object.keys(room.playerPlaylists ?? {})
-  const canStart      = isHost && connectedUids.length >= 2
+  const hasHostPlaylist = Boolean(room.playerPlaylists?.[currentUser.uid])
+  const canStart      = isHost && connectedUids.length >= 2 && hasHostPlaylist
+  const startDisabledReason = !hasHostPlaylist
+    ? t('lobby_need_host_playlist')
+    : connectedUids.length < 2
+      ? t('lobby_need_players')
+      : ''
 
   const handleSelectPlaylist = async (playlist) => {
     setPickerToken(null)
@@ -387,7 +394,7 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
               className="w-full"
               onClick={() => startGame(roundCount)}
               disabled={!canStart || loading}
-              title={!canStart ? 'Need ≥ 2 players with playlists connected' : ''}
+              title={!canStart ? startDisabledReason : ''}
             >
               {loading ? (
                 <>
@@ -429,7 +436,7 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
 // ─── Playing phase ────────────────────────────────────────────────────────────
 
 function GameView({ room, currentUser, isHost, onLeave }) {
-  const { submitGuess, revealRound, advanceRound } = useGameStore()
+  const { submitGuess, revealRound, advanceRound, skipRound } = useGameStore()
 
   const rounds      = Array.isArray(room.rounds) ? room.rounds : []
   const roundIndex  = room.currentRound ?? 0
@@ -446,16 +453,16 @@ function GameView({ room, currentUser, isHost, onLeave }) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-[10px] sm:text-xs uppercase tracking-widest text-muted">
-              Round {roundIndex + 1} / {rounds.length}
+              {t('game_round', { current: roundIndex + 1, total: rounds.length })}
             </p>
-            <h1 className="text-base sm:text-xl font-bold">Whose song is it?</h1>
+            <h1 className="text-base sm:text-xl font-bold">{t('game_whose_song')}</h1>
           </div>
 
           {/* Live score strip + leave */}
-          <div className="flex shrink-0 items-center gap-3 overflow-x-auto">
-            <div className="flex gap-2 shrink-0">
+          <div className="flex max-w-full shrink min-w-0 items-center gap-3 overflow-x-auto snap-x snap-mandatory">
+            <div className="flex gap-2 shrink-0 snap-start">
               {room.players.map(p => (
-                <div key={p.uid} className="flex flex-col items-center">
+                <div key={p.uid} className="flex flex-col items-center snap-start">
                   <span className="text-xs font-bold text-brand-green">
                     {room.scores?.[p.uid] ?? 0}
                   </span>
@@ -469,7 +476,7 @@ function GameView({ room, currentUser, isHost, onLeave }) {
               onClick={onLeave}
               className="flex min-h-9 items-center rounded-full border border-surface-2 px-2.5 py-1 text-[10px] text-muted transition-colors hover:text-white active:scale-95"
             >
-              Leave
+              {t('lobby_leave')}
             </button>
           </div>
         </div>
@@ -493,10 +500,12 @@ function GameView({ room, currentUser, isHost, onLeave }) {
           players={room.players}
           currentUserId={currentUser.uid}
           isHost={isHost}
+          roundIndex={roundIndex}
           isLastRound={isLastRound}
           onGuess={submitGuess}
           onReveal={revealRound}
           onAdvance={advanceRound}
+          onSkip={skipRound}
         />
       </div>
     </div>
@@ -518,20 +527,26 @@ function FinishedView({ room }) {
     }
   }, [])
 
-  // Award gold to the winner (1st place)
+  // Award gold to the winner (1st place) — guarded by Firestore flag
   useEffect(() => {
-    if (goldAwarded.current || !firebaseUser) return
+    if (goldAwarded.current || !firebaseUser || !room?.id) return
+    // If gold was already awarded for this room (e.g. page refresh), skip
+    if (room.goldAwarded) { goldAwarded.current = true; return }
+
     const scores = room.scores ?? {}
     const sortedUids = Object.entries(scores)
       .sort(([, a], [, b]) => b - a)
       .map(([uid]) => uid)
     if (sortedUids[0] === firebaseUser.uid) {
       goldAwarded.current = true
-      addGold(firebaseUser.uid, GOLD_PER_WIN).then(() => {
+      // Atomically claim the gold — only the first caller wins the race
+      markGoldAwarded(room.id).then(async (claimed) => {
+        if (!claimed) return  // another client already awarded it
+        await addGold(firebaseUser.uid, GOLD_PER_WIN)
         toast.success(t('gold_win_toast', { amount: GOLD_PER_WIN }))
       })
     }
-  }, [room.scores, firebaseUser, addGold])
+  }, [room?.scores, room?.goldAwarded, firebaseUser, addGold, room?.id])
 
   return (
     <div className="flex min-h-full flex-col px-4 sm:px-5 pt-6 pb-6">
@@ -560,6 +575,23 @@ export default function Room() {
     _subscribe(roomId)
     return () => leaveRoom()
   }, [roomId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Cleanup on tab/browser close ───────────────────────────────────────
+  // beforeunload handlers are synchronous — we can't await async ops.
+  // Fire the Firestore write and move on; best-effort.
+  // Reliable cleanup for abandoned rooms should rely on TTL-based server cleanup.
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const { room: currentRoom } = useGameStore.getState()
+      const { firebaseUser: currentUser } = useAuthStore.getState()
+      if (currentRoom?.id && currentUser?.uid) {
+        // Fire-and-forget — browser may kill the page before this completes
+        fsLeaveRoom(currentRoom.id, currentUser.uid)
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
 
   // ── Toast: new player joined (triggered by other clients' actions) ────────
   const prevPlayerCount = useRef(null)

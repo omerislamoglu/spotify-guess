@@ -26,6 +26,7 @@ export default {
   dash_go_premium: 'Go Premium',
   dash_premium_desc: 'Diamonds + no ads',
   dash_upgrade: 'Upgrade →',
+  dash_room_failed_refund: 'Something went wrong — your energy has been refunded.',
   dash_signed_out: 'Signed out. See you next time!',
 
   // ── Room code ──────────────────────────────────────────────────────────────
@@ -46,7 +47,6 @@ export default {
   lobby_no_playlist: 'No playlist yet',
   lobby_host: 'host',
   lobby_connected: 'Connected ✓',
-  lobby_tracks: '{name} · {count} tracks',
   lobby_see_tracks: 'See tracks',
   lobby_hide: 'Hide',
   lobby_change: 'Change',
@@ -56,10 +56,13 @@ export default {
   lobby_liked_songs: 'Use Liked Songs',
   lobby_rounds: 'Rounds',
   lobby_start_game: 'Start Game — {count} rounds',
+  lobby_fewer_rounds: 'Not enough unique songs — only {count} rounds created.',
   lobby_building: 'Building rounds...',
   lobby_waiting_host: 'Waiting for the host to start the game...',
   lobby_invite_text: 'Join my EchoGuess room! Code: {code}',
   lobby_invite_copied: 'Invite link copied!',
+  lobby_need_host_playlist: 'Connect your playlist first',
+  lobby_need_players: 'Need at least 2 players',
 
   // ── Game ────────────────────────────────────────────────────────────────────
   game_round: 'Round {current} / {total}',
@@ -82,10 +85,18 @@ export default {
   game_waiting_host: 'Waiting for host to continue...',
   game_finding_clip: 'Finding clip...',
   game_no_preview: 'No audio preview',
+  game_no_preview_skip: 'This song has no preview — host will skip it',
   game_preview: '30s preview',
+  game_aria_play: 'Play preview',
+  game_aria_pause: 'Pause preview',
+  game_auto_next: 'Next round in {count}...',
+  game_skip_round: 'Skip Round',
+  game_progress: '{done}/{total} players guessed',
+  game_play_to_start: 'Play to start',
   game_perfect: '+{pts} points! Perfect guess',
   game_partial: '+{pts} points! {correct} correct, {wrong} wrong',
   game_zero: 'Too many wrong picks — 0 points. It was {names}',
+  game_zero_detail: 'Too many wrong picks — net 0 points (earned {correctPts}, lost {wrongPts})',
   game_wrong: 'Wrong — it was {names}!',
   game_from_playlist: "♪ from {names}'s playlist",
 
