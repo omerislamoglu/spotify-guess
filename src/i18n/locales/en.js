@@ -78,7 +78,7 @@ export default {
   game_owner: 'Owner ✓',
   game_votes: '{count} vote(s)',
   game_reveal: 'Reveal Answer',
-  game_force_reveal: 'Force Reveal',
+  game_waiting_votes: 'Waiting for all votes...',
   game_next_round: 'Next Round →',
   game_see_scores: 'See Final Scores →',
   game_over: 'Game over!',
@@ -206,4 +206,11 @@ export default {
   share_link_copied: 'Link copied!',
   join_joining_room: 'Joining room {code}...',
   join_room_not_found: 'Room not found or already started.',
+
+  // ── Lobby return / Energy ─────────────────────────────────────────────────
+  audio_tap_to_play: 'Tap to play',
+  back_to_lobby: 'Back to Lobby',
+  waiting_host_lobby: 'Waiting for the host to start a new round...',
+  energy_depleted_warning: 'Out of energy! Buy energy with diamonds from the shop.',
+  go_to_shop: 'Go to Shop',
 }

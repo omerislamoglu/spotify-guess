@@ -10,7 +10,7 @@ export async function shareRoom(code) {
 
   if (Capacitor.isNativePlatform()) {
     try {
-      await Share.share({ text, url, dialogTitle: 'EchoGuess' })
+      await Share.share({ text, dialogTitle: 'EchoGuess' })
     } catch (e) {
       if (e?.message !== 'Share canceled') console.error('[share]', e)
     }

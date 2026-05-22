@@ -240,6 +240,26 @@ export async function advanceRound(roomId, nextIndex, totalRounds) {
   })
 }
 
+// ─── Reset to Lobby ──────────────────────────────────────────────────────────
+
+export async function resetToLobby(roomId) {
+  const roomRef = doc(db, ROOMS, roomId)
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef)
+    if (!snap.exists()) return
+    const data = snap.data()
+    const players = (data.players ?? []).map(p => ({ ...p }))
+    tx.update(roomRef, {
+      phase: 'lobby',
+      currentRound: 0,
+      rounds: [],
+      scores: {},
+      goldAwarded: false,
+      playerPlaylists: {},
+    })
+  })
+}
+
 // ─── Gold Award ──────────────────────────────────────────────────────────────
 
 /**

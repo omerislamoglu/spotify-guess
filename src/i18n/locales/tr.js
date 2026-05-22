@@ -78,7 +78,7 @@ export default {
   game_owner: 'Sahibi ✓',
   game_votes: '{count} oy',
   game_reveal: 'Cevabı Göster',
-  game_force_reveal: 'Zorla Göster',
+  game_waiting_votes: 'Tüm oylar bekleniyor...',
   game_next_round: 'Sonraki Tur →',
   game_see_scores: 'Final Skorları →',
   game_over: 'Oyun bitti!',
@@ -206,4 +206,11 @@ export default {
   share_link_copied: 'Link kopyalandı!',
   join_joining_room: '{code} odasına katılınıyor...',
   join_room_not_found: 'Oda bulunamadı veya oyun başlamış.',
+
+  // ── Lobby return / Energy ─────────────────────────────────────────────────
+  audio_tap_to_play: 'Çalmak için ekrana dokun',
+  back_to_lobby: 'Lobiye Dön',
+  waiting_host_lobby: 'Ev sahibinin yeni tur başlatması bekleniyor...',
+  energy_depleted_warning: 'Enerjin bitti! Mağazadan elmasla enerji al.',
+  go_to_shop: 'Mağazaya Git',
 }

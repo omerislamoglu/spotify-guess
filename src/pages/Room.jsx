@@ -5,8 +5,8 @@ import toast from 'react-hot-toast'
 import useGameStore from '../store/useGameStore'
 import useAuthStore from '../store/useAuthStore'
 import useEnergyStore from '../store/useEnergyStore'
-import { GOLD_PER_WIN } from '../services/energyService'
-import { markGoldAwarded, leaveRoom as fsLeaveRoom } from '../services/gameService'
+import { GOLD_PER_WIN, ENERGY_PER_GAME } from '../services/energyService'
+import { markGoldAwarded, leaveRoom as fsLeaveRoom, resetToLobby } from '../services/gameService'
 import GuessingCard from '../components/game/GuessingCard'
 import PlaylistPicker from '../components/game/PlaylistPicker'
 import ScoreBoard from '../components/game/ScoreBoard'
@@ -496,8 +496,13 @@ function GameView({ room, currentUser, isHost, onLeave }) {
                   }`}>
                     {isFirst ? <Crown size={12} /> : p.displayName?.[0]?.toUpperCase()}
                   </span>
-                  <span className={`min-w-0 flex-1 truncate text-xs font-medium ${isMe ? 'text-white' : 'text-white/70'}`}>
+                  <span className={`min-w-0 flex-1 truncate text-xs font-medium flex items-center gap-1 ${isMe ? 'text-white' : 'text-white/70'}`}>
                     {p.displayName}
+                    {p.isPremium && (
+                      <span className="shrink-0 flex items-center gap-0.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-400 px-1 py-px text-[7px] font-black text-black leading-none">
+                        PRO
+                      </span>
+                    )}
                   </span>
                   <span className="shrink-0 text-xs font-bold tabular-nums text-brand-green transition-all">
                     {p.score}
@@ -525,11 +530,16 @@ function GameView({ room, currentUser, isHost, onLeave }) {
 
 // ─── Finished phase ───────────────────────────────────────────────────────────
 
-function FinishedView({ room }) {
+function FinishedView({ room, isHost }) {
+  const navigate = useNavigate()
   const adShown = useRef(false)
   const goldAwarded = useRef(false)
   const { firebaseUser } = useAuthStore()
   const addGold = useEnergyStore(s => s.addGold)
+  const energy = useEnergyStore(s => s.energy)
+  const [resetting, setResetting] = useState(false)
+
+  const lowEnergy = energy < ENERGY_PER_GAME
 
   useEffect(() => {
     if (!adShown.current) {
@@ -539,10 +549,8 @@ function FinishedView({ room }) {
     }
   }, [])
 
-  // Award gold to the winner (1st place) — guarded by Firestore flag
   useEffect(() => {
     if (goldAwarded.current || !firebaseUser || !room?.id) return
-    // If gold was already awarded for this room (e.g. page refresh), skip
     if (room.goldAwarded) { goldAwarded.current = true; return }
 
     const scores = room.scores ?? {}
@@ -551,23 +559,61 @@ function FinishedView({ room }) {
       .map(([uid]) => uid)
     if (sortedUids[0] === firebaseUser.uid) {
       goldAwarded.current = true
-      // Atomically claim the gold — only the first caller wins the race
       markGoldAwarded(room.id).then(async (claimed) => {
-        if (!claimed) return  // another client already awarded it
+        if (!claimed) return
         await addGold(firebaseUser.uid, GOLD_PER_WIN)
         toast.success(t('gold_win_toast', { amount: GOLD_PER_WIN }))
       })
     }
   }, [room?.scores, room?.goldAwarded, firebaseUser, addGold, room?.id])
 
+  const handleBackToLobby = async () => {
+    setResetting(true)
+    try {
+      await resetToLobby(room.id)
+    } catch (err) {
+      console.error('[resetToLobby]', err)
+      toast.error(t('error_generic'))
+      setResetting(false)
+    }
+  }
+
   return (
     <div className="flex min-h-full flex-col px-4 sm:px-5 pt-6 pb-6">
-      <div className="mx-auto w-full max-w-md">
+      <div className="mx-auto w-full max-w-md space-y-4">
         <ScoreBoard
           players={room.players}
           scores={room.scores ?? {}}
           rounds={room.rounds ?? []}
+          hideLeaveButton
         />
+
+        {isHost && (
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={handleBackToLobby}
+            disabled={resetting}
+          >
+            {resetting ? t('lobby_building') : t('back_to_lobby')}
+          </Button>
+        )}
+
+        {!isHost && (
+          <p className="text-center text-sm text-muted">{t('waiting_host_lobby')}</p>
+        )}
+
+        {lowEnergy && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 px-4 py-3 text-center space-y-2">
+            <p className="text-sm text-amber-300">⚡ {t('energy_depleted_warning')}</p>
+            <button
+              onClick={() => navigate('/dashboard?shop=1')}
+              className="rounded-lg bg-amber-500/20 px-4 py-2 text-xs font-semibold text-amber-300 transition-colors hover:bg-amber-500/30"
+            >
+              {t('go_to_shop')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -668,7 +714,7 @@ export default function Room() {
   const phaseView = () => {
     switch (room.phase) {
       case 'playing':  return <GameView    room={room} currentUser={currentUser} isHost={isHost} onLeave={handleLeave} />
-      case 'finished': return <FinishedView room={room} />
+      case 'finished': return <FinishedView room={room} isHost={isHost} />
       default:         return <LobbyView   room={room} currentUser={currentUser} isHost={isHost} onLeave={handleLeave} />
     }
   }

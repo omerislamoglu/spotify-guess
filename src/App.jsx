@@ -40,7 +40,9 @@ function DeepLinkHandler() {
       if (code && state) {
         try {
           await handleSpotifyCallback(code, state)
-          navigate('/dashboard', { replace: true })
+          const target = localStorage.getItem('postLoginRedirect') || '/dashboard'
+          localStorage.removeItem('postLoginRedirect')
+          navigate(target, { replace: true })
         } catch {
           // Error is set in the store
         } finally {

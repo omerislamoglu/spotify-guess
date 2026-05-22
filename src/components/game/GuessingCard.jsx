@@ -153,6 +153,7 @@ export default function GuessingCard({
 
   // ── Resolve preview URL (Spotify first, iTunes fallback) ────────────────────
   useEffect(() => {
+    console.log(`[round ${roundIndex}] track: ${round.track.name} - ${round.track.artists}, previewUrl: ${round.track.previewUrl || 'null'}`)
     if (round.track.previewUrl) {
       setPreviewUrl(round.track.previewUrl)
       setPreviewStatus('ready')
@@ -161,6 +162,7 @@ export default function GuessingCard({
     setPreviewUrl(null)
     setPreviewStatus('searching')
     fetchItunesPreview(round.track.artists, round.track.name).then(url => {
+      console.log(`[round ${roundIndex}] iTunes fallback: ${url || 'null'}`)
       setPreviewUrl(url)
       setPreviewStatus(url ? 'ready' : 'unavailable')
     })
@@ -179,7 +181,11 @@ export default function GuessingCard({
     if (!isHost || roundIndex <= 0 || previewStatus !== 'ready' || !audioRef.current || round.revealed) return
     audioRef.current.play()
       .then(() => setIsPlaying(true))
-      .catch(() => {})
+      .catch((err) => {
+        if (err.name === 'NotAllowedError') {
+          console.warn('[audio] autoplay blocked — user gesture needed')
+        }
+      })
   }, [isHost, previewStatus, roundIndex, round.revealed, round.track.id])
 
   // ── Audio toggle ────────────────────────────────────────────────────────────
@@ -191,8 +197,13 @@ export default function GuessingCard({
     } else {
       audioRef.current.play()
         .then(() => setIsPlaying(true))
-        .catch(() => {
-          toast.error(t('game_no_preview'))
+        .catch((err) => {
+          console.error('[audio] play failed:', err.name, err.message)
+          if (err.name === 'NotAllowedError') {
+            toast(t('audio_tap_to_play'), { icon: '🔊' })
+          } else {
+            toast.error(t('game_no_preview'))
+          }
           setIsPlaying(false)
         })
     }
@@ -270,6 +281,11 @@ export default function GuessingCard({
         <audio
           ref={audioRef}
           onEnded={() => setIsPlaying(false)}
+          onError={(e) => {
+            console.error('[audio] error:', audioRef.current?.error?.message, e)
+            setIsPlaying(false)
+          }}
+          crossOrigin="anonymous"
           playsInline
           preload="auto"
         />
@@ -435,13 +451,14 @@ export default function GuessingCard({
           {!revealed ? (
             <button
               onClick={onReveal}
+              disabled={!allVoted}
               className={`flex min-h-[52px] w-full items-center justify-center rounded-2xl text-sm font-semibold transition-all active:scale-[0.98] ${
                 allVoted
                   ? 'bg-brand-green text-black hover:brightness-110'
-                  : 'border border-surface-2 text-muted hover:border-muted hover:text-white'
+                  : 'border border-surface-2 text-muted cursor-not-allowed opacity-50'
               }`}
             >
-              {allVoted ? t('game_reveal') : t('game_force_reveal')}
+              {t('game_reveal')}
             </button>
           ) : (
             <button

@@ -74,7 +74,12 @@ export default function Login() {
         <Button
           variant="primary"
           className="w-full"
-          onClick={startSpotifyAuth}
+          onClick={() => {
+            if (returnTo && returnTo !== '/dashboard') {
+              localStorage.setItem('postLoginRedirect', returnTo)
+            }
+            startSpotifyAuth()
+          }}
           disabled={loading}
         >
           <SpotifyIcon />

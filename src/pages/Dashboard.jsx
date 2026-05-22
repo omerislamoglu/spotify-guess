@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Capacitor } from '@capacitor/core'
 import { PlusCircle, Users, LogOut, Crown, X, ShieldCheck, Gem, ShoppingBag, RotateCcw, Zap } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -338,10 +338,11 @@ function PremiumModal({ onClose }) {
 
 export default function Dashboard() {
   const navigate                    = useNavigate()
+  const [searchParams]              = useSearchParams()
   const [joinCode, setJoinCode]     = useState('')
   const [view, setView]             = useState('home') // 'home' | 'join'
   const [showPremium, setShowPremium] = useState(false)
-  const [showShop, setShowShop]       = useState(false)
+  const [showShop, setShowShop]       = useState(() => searchParams.get('shop') === '1')
 
   const { firebaseUser, spotifyProfile, signOut } = useAuthStore()
   const { createRoom, joinRoom, loading, error, clearError } = useGameStore()

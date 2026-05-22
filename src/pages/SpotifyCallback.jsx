@@ -31,13 +31,20 @@ export default function SpotifyCallback() {
       return
     }
 
+    const consumeRedirect = () => {
+      const target = localStorage.getItem('postLoginRedirect')
+      if (target) {
+        localStorage.removeItem('postLoginRedirect')
+        return target
+      }
+      return '/dashboard'
+    }
+
     handleSpotifyCallback(code, state)
-      .then(() => navigate('/dashboard', { replace: true }))
+      .then(() => navigate(consumeRedirect(), { replace: true }))
       .catch(() => {
-        // State mismatch or token exchange failed.
-        // If already logged in from a previous session, go to dashboard.
         const fb = useAuthStore.getState().firebaseUser
-        navigate(fb ? '/dashboard' : '/login', { replace: true })
+        navigate(fb ? consumeRedirect() : '/login', { replace: true })
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -1,19 +1,12 @@
 import { useNavigate } from 'react-router-dom'
+import { Crown } from 'lucide-react'
 import { t } from '../../i18n'
 import useGameStore from '../../store/useGameStore'
 import Button from '../ui/Button'
 
 const MEDALS = ['🥇', '🥈', '🥉']
 
-/**
- * Final scoreboard shown after all rounds are complete.
- *
- * Props:
- *  players  — room players array [{ uid, displayName, avatarUrl }]
- *  scores   — Firestore scores map { [uid]: number }
- *  rounds   — completed rounds array (for the round-by-round breakdown)
- */
-export default function ScoreBoard({ players, scores, rounds }) {
+export default function ScoreBoard({ players, scores, rounds, hideLeaveButton }) {
   const navigate  = useNavigate()
   const leaveRoom = useGameStore(s => s.leaveRoom)
 
@@ -62,10 +55,22 @@ export default function ScoreBoard({ players, scores, rounds }) {
               <span className="text-xl w-7 text-center">
                 {MEDALS[idx] ?? `${idx + 1}`}
               </span>
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-sm font-bold text-brand-green">
+              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-sm font-bold text-brand-green">
                 {player.displayName?.[0]?.toUpperCase()}
+                {player.isPremium && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-amber-500 text-black shadow-md">
+                    <Crown size={8} />
+                  </span>
+                )}
               </div>
-              <span className="flex-1 text-sm font-medium">{player.displayName}</span>
+              <span className="flex-1 text-sm font-medium flex items-center gap-1.5">
+                {player.displayName}
+                {player.isPremium && (
+                  <span className="shrink-0 flex items-center gap-0.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-400 px-1.5 py-0.5 text-[8px] font-black text-black">
+                    PRO
+                  </span>
+                )}
+              </span>
               <span className="text-sm font-bold text-brand-green">
                 {player.score} pts
               </span>
@@ -122,9 +127,11 @@ export default function ScoreBoard({ players, scores, rounds }) {
         </div>
       )}
 
-      <Button variant="primary" className="w-full" onClick={handleLeave}>
-        {t('score_back')}
-      </Button>
+      {!hideLeaveButton && (
+        <Button variant="primary" className="w-full" onClick={handleLeave}>
+          {t('score_back')}
+        </Button>
+      )}
     </div>
   )
 }
