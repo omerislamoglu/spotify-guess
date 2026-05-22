@@ -211,6 +211,9 @@ export default {
   audio_tap_to_play: 'Çalmak için ekrana dokun',
   back_to_lobby: 'Lobiye Dön',
   waiting_host_lobby: 'Ev sahibinin yeni tur başlatması bekleniyor...',
+  preparing_tracks: 'Şarkılar hazırlanıyor...',
+  insufficient_previews: '{name} listesinde yeterli oynatılabilir şarkı yok (min {min}).',
+  energy_insufficient_start: 'Yeni oyun başlatmak için yeterli enerjin yok. Mağazadan al!',
   energy_depleted_warning: 'Enerjin bitti! Mağazadan elmasla enerji al.',
   go_to_shop: 'Mağazaya Git',
 }

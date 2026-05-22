@@ -13,7 +13,14 @@
       "*.scdn.co",
       "*.apple.com",
       "*.mzstatic.com",
-      "itunes.apple.com"
+      "itunes.apple.com",
+      "*.deezer.com",
+      "*.dzcdn.net"
     ]
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
   }
 }

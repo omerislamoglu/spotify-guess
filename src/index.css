@@ -88,8 +88,7 @@
   }
 
   #root {
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
     height: 100%;
     /* Safe area insets for notch devices */
     padding-top: env(safe-area-inset-top);

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Play, Pause, Lock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { t } from '../../i18n'
-import { fetchItunesPreview } from '../../services/spotifyService'
+import { fetchDeezerPreview, fetchItunesPreview } from '../../services/spotifyService'
 import { POINTS_CORRECT_GUESS, POINTS_WRONG_GUESS } from '../../services/gameService'
 
 // ─── CSS Audio Visualizer ─────────────────────────────────────────────────────
@@ -151,9 +151,8 @@ export default function GuessingCard({
     prevGuessedCountRef.current = guessedCount
   }, [guessedCount])
 
-  // ── Resolve preview URL (Spotify first, iTunes fallback) ────────────────────
+  // ── Resolve preview URL (Spotify → Deezer → iTunes) ─────────────────────────
   useEffect(() => {
-    console.log(`[round ${roundIndex}] track: ${round.track.name} - ${round.track.artists}, previewUrl: ${round.track.previewUrl || 'null'}`)
     if (round.track.previewUrl) {
       setPreviewUrl(round.track.previewUrl)
       setPreviewStatus('ready')
@@ -161,18 +160,35 @@ export default function GuessingCard({
     }
     setPreviewUrl(null)
     setPreviewStatus('searching')
-    fetchItunesPreview(round.track.artists, round.track.name).then(url => {
-      console.log(`[round ${roundIndex}] iTunes fallback: ${url || 'null'}`)
-      setPreviewUrl(url)
-      setPreviewStatus(url ? 'ready' : 'unavailable')
+
+    let cancelled = false
+    fetchDeezerPreview(round.track.artists, round.track.name).then(url => {
+      if (cancelled) return
+      if (url) {
+        setPreviewUrl(url)
+        setPreviewStatus('ready')
+        return
+      }
+      return fetchItunesPreview(round.track.artists, round.track.name).then(itunesUrl => {
+        if (cancelled) return
+        setPreviewUrl(itunesUrl)
+        setPreviewStatus(itunesUrl ? 'ready' : 'unavailable')
+      })
     })
+
+    return () => { cancelled = true }
   }, [round.track.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Load audio when previewUrl changes (iOS WKWebView needs explicit load) ──
+  // ── Load audio when previewUrl changes ──────────────────────────────────────
   useEffect(() => {
-    if (previewUrl && audioRef.current) {
-      audioRef.current.src = previewUrl
-      audioRef.current.load()
+    const audio = audioRef.current
+    if (!previewUrl || !audio) return
+    audio.src = previewUrl
+    audio.load()
+    return () => {
+      audio.pause()
+      audio.removeAttribute('src')
+      audio.load()
     }
   }, [previewUrl])
 
@@ -190,15 +206,15 @@ export default function GuessingCard({
 
   // ── Audio toggle ────────────────────────────────────────────────────────────
   const togglePlay = () => {
-    if (!audioRef.current) return
+    const audio = audioRef.current
+    if (!audio) return
     if (isPlaying) {
-      audioRef.current.pause()
+      audio.pause()
       setIsPlaying(false)
     } else {
-      audioRef.current.play()
+      audio.play()
         .then(() => setIsPlaying(true))
         .catch((err) => {
-          console.error('[audio] play failed:', err.name, err.message)
           if (err.name === 'NotAllowedError') {
             toast(t('audio_tap_to_play'), { icon: '🔊' })
           } else {
@@ -241,10 +257,10 @@ export default function GuessingCard({
   }
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className={`space-y-2 sm:space-y-3 ${isOwner && !revealed ? 'overflow-hidden' : ''}`}>
 
       {/* ── Album art ��─────────────────────────��───────────────────────────── */}
-      <div className="relative mx-auto h-36 w-36 sm:h-48 sm:w-48 overflow-hidden rounded-2xl shadow-2xl">
+      <div className="relative mx-auto h-28 w-28 sm:h-36 sm:w-36 overflow-hidden rounded-2xl shadow-2xl">
         {round.track.albumArt ? (
           <img
             src={round.track.albumArt}
@@ -285,7 +301,6 @@ export default function GuessingCard({
             console.error('[audio] error:', audioRef.current?.error?.message, e)
             setIsPlaying(false)
           }}
-          crossOrigin="anonymous"
           playsInline
           preload="auto"
         />
@@ -293,23 +308,23 @@ export default function GuessingCard({
 
       <div className="flex items-center justify-center gap-4">
         {previewStatus === 'searching' ? (
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-2">
-            <span className="h-5 w-5 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-2">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
           </div>
         ) : previewStatus === 'unavailable' ? (
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-2 text-2xl">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-2 text-xl">
             🔇
           </div>
         ) : isHost ? (
           <button
             onClick={togglePlay}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-green text-black shadow-lg transition-all hover:brightness-110 active:scale-95"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-green text-black shadow-lg transition-all hover:brightness-110 active:scale-95"
             aria-label={isPlaying ? t('game_aria_pause') : t('game_aria_play')}
           >
             {isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" className="translate-x-0.5" />}
           </button>
         ) : (
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-2">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-2">
             <AudioVisualizer active={isPlaying} />
           </div>
         )}
@@ -347,9 +362,9 @@ export default function GuessingCard({
       <div className="border-t border-surface-2" />
 
       {revealed && (
-        <div className="flex items-center justify-center gap-3 rounded-xl border border-surface-2 px-4 py-3 text-sm text-muted">
+        <div className="flex items-center justify-center gap-2 rounded-lg border border-surface-2 px-3 py-1.5 text-xs text-muted">
           <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
             style={{
               background: `conic-gradient(rgb(29 185 84) ${(advanceCount / 4) * 360}deg, rgb(40 40 40) 0deg)`,
             }}
@@ -362,16 +377,16 @@ export default function GuessingCard({
 
       {/* ── Owner waiting state ────────────────────────────────────────────── */}
       {isOwner && !revealed && (
-        <div className="rounded-xl bg-surface-2 px-4 py-3 text-center">
-          <p className="text-sm font-medium">{t('game_your_song')}</p>
-          <p className="mt-0.5 text-xs text-muted">{t('game_sit_tight')}</p>
+        <div className="rounded-lg bg-surface-2 px-3 py-2 text-center">
+          <p className="text-xs font-medium">{t('game_your_song')}</p>
+          <p className="text-[10px] text-muted">{t('game_sit_tight')}</p>
         </div>
       )}
 
       {/* ── Guess buttons (multi-select) ───────────────────────────────────── */}
       {!isOwner && (
-        <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
             {revealed
               ? t('game_results')
               : hasGuessed
@@ -393,7 +408,7 @@ export default function GuessingCard({
                 key={player.uid}
                 onClick={() => toggleSelect(player.uid)}
                 disabled={hasGuessed || revealed}
-                className={`flex min-h-[52px] w-full items-center justify-between rounded-2xl border px-4 py-3 text-sm font-semibold transition-all active:scale-[0.97] disabled:cursor-default ${guessButtonClass(player.uid)}`}
+                className={`flex min-h-[40px] w-full items-center justify-between rounded-xl border px-3 py-1.5 text-sm font-semibold transition-all active:scale-[0.97] disabled:cursor-default ${guessButtonClass(player.uid)}`}
               >
                 <span className="flex items-center gap-3 min-w-0">
                   <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
@@ -424,7 +439,7 @@ export default function GuessingCard({
             <button
               onClick={lockIn}
               disabled={selected.size === 0}
-              className={`flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98] ${
+              className={`flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] ${
                 selected.size > 0
                   ? 'bg-brand-green text-black hover:brightness-110'
                   : 'border border-surface-2 text-muted cursor-not-allowed'
@@ -447,12 +462,12 @@ export default function GuessingCard({
 
       {/* ── Host controls ──────────────────────────────────────────────────── */}
       {isHost && (
-        <div className="space-y-2 pt-1">
+        <div className="space-y-1.5">
           {!revealed ? (
             <button
               onClick={onReveal}
               disabled={!allVoted}
-              className={`flex min-h-[52px] w-full items-center justify-center rounded-2xl text-sm font-semibold transition-all active:scale-[0.98] ${
+              className={`flex min-h-[40px] w-full items-center justify-center rounded-xl text-sm font-semibold transition-all active:scale-[0.98] ${
                 allVoted
                   ? 'bg-brand-green text-black hover:brightness-110'
                   : 'border border-surface-2 text-muted cursor-not-allowed opacity-50'
@@ -463,7 +478,7 @@ export default function GuessingCard({
           ) : (
             <button
               onClick={onAdvance}
-              className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-brand-green text-sm font-semibold text-black transition-all hover:brightness-110 active:scale-[0.98]"
+              className="flex min-h-[40px] w-full items-center justify-center rounded-xl bg-brand-green text-sm font-semibold text-black transition-all hover:brightness-110 active:scale-[0.98]"
             >
               {isLastRound ? t('game_see_scores') : t('game_next_round')}
             </button>

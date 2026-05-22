@@ -359,21 +359,10 @@ export default function Dashboard() {
   }
 
   const handleCreate = async () => {
-    if (!canPlay) {
-      toast.error(t('dash_no_energy_create', { cost: costPerGame }))
-      return
-    }
-    const allowed = await consumeEnergy()
-    if (!allowed) {
-      toast.error(t('dash_no_energy_create', { cost: costPerGame }))
-      return
-    }
     const roomId = await createRoom(player)
     if (roomId) {
       navigate(`/room/${roomId}`)
     } else {
-      // Room creation failed — refund the consumed energy
-      await addEnergy(costPerGame)
       toast.error(t('dash_room_failed_refund'))
     }
   }
@@ -456,7 +445,7 @@ export default function Dashboard() {
               variant="primary"
               className="w-full"
               onClick={handleCreate}
-              disabled={loading || !canPlay}
+              disabled={loading}
             >
               <PlusCircle size={17} />
               {loading ? t('dash_creating') : t('dash_create_room')}

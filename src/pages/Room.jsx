@@ -60,7 +60,7 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
   const [roundCount,    setRoundCount]    = useState(5)
 
   const navigate = useNavigate()
-  const { connectPlaylist, connectRecentlyPlayed, connectLikedSongs, startGame, loading, error, clearError } = useGameStore()
+  const { connectPlaylist, connectRecentlyPlayed, connectLikedSongs, startGame, loading, preparing, error, clearError } = useGameStore()
   const { ensureFreshToken, spotifyToken }                         = useAuthStore()
 
   const openPicker = useCallback(async () => {
@@ -106,14 +106,14 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
   }
 
   return (
-    <div className="flex min-h-full flex-col px-4 sm:px-5 pt-6 pb-6">
-      <div className="mx-auto w-full max-w-md space-y-4">
+    <div className="flex h-full flex-col overflow-hidden px-4 sm:px-5 pt-3 pb-3">
+      <div className="mx-auto w-full max-w-md space-y-2">
 
         {/* Header */}
         <div className="animate-fade-in flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[10px] sm:text-xs uppercase tracking-widest text-muted">{t('lobby_title')}</p>
-            <h1 className="text-lg sm:text-xl font-bold">{t('lobby_room', { code: room.code })}</h1>
+            <p className="text-[10px] uppercase tracking-widest text-muted">{t('lobby_title')}</p>
+            <h1 className="text-base sm:text-lg font-bold">{t('lobby_room', { code: room.code })}</h1>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <InviteButton code={room.code} />
@@ -128,13 +128,12 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
 
         {/* Join code — animated floating card */}
         <div
-          className="animate-slide-up relative overflow-hidden rounded-2xl border border-brand-green/30 bg-gradient-to-br from-brand-green/10 to-brand-green/5 px-5 py-4 text-center"
+          className="animate-slide-up relative overflow-hidden rounded-xl border border-brand-green/30 bg-gradient-to-br from-brand-green/10 to-brand-green/5 px-4 py-2 text-center"
           style={{ animationDelay: '50ms' }}
         >
-          {/* Ambient glow */}
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(30,215,96,0.12),transparent_65%)]" />
-          <p className="mb-1 text-[11px] text-muted">{t('lobby_share_code')}</p>
-          <p className="animate-float font-mono text-3xl font-bold tracking-[0.35em] text-brand-green drop-shadow-[0_0_12px_rgba(30,215,96,0.6)]">
+          <p className="text-[10px] text-muted">{t('lobby_share_code')}</p>
+          <p className="animate-float font-mono text-2xl font-bold tracking-[0.3em] text-brand-green drop-shadow-[0_0_12px_rgba(30,215,96,0.6)]">
             {room.code}
           </p>
         </div>
@@ -144,12 +143,12 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
           className="animate-slide-up overflow-hidden rounded-2xl border border-white/8 bg-white/4"
           style={{ animationDelay: '100ms' }}
         >
-          <div className="px-4 pt-4 pb-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+          <div className="px-3 pt-2.5 pb-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
               {t('lobby_players', { count: room.players.length })}
             </p>
           </div>
-          <ul className="space-y-1 px-3 pb-3">
+          <ul className="space-y-0.5 px-2 pb-2">
             {room.players.map((player, idx) => {
               const pl = room.playerPlaylists?.[player.uid]
               const premium = player.isPremium
@@ -163,12 +162,10 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
                 >
                   {/* Premium row — Discord Nitro style */}
                   {premium ? (
-                    <div className="animate-nitro-glow relative overflow-hidden rounded-xl border border-amber-400/30 bg-gradient-to-r from-amber-950/60 via-amber-900/30 to-transparent px-3 py-2.5">
-                      {/* Ambient shimmer sweep */}
+                    <div className="animate-nitro-glow relative overflow-hidden rounded-xl border border-amber-400/30 bg-gradient-to-r from-amber-950/60 via-amber-900/30 to-transparent px-2.5 py-1.5">
                       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(105deg,transparent_30%,rgba(251,191,36,0.06)_50%,transparent_70%)] animate-[shimmer_3s_linear_infinite] bg-[length:200%_auto]" />
-                      <div className="flex items-center gap-3">
-                        {/* Avatar with crown overlay */}
-                        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-400/40 to-amber-600/25 text-sm font-bold text-amber-200 ring-2 ring-amber-400/60 shadow-[0_0_12px_rgba(251,191,36,0.4)]">
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-400/40 to-amber-600/25 text-xs font-bold text-amber-200 ring-2 ring-amber-400/60 shadow-[0_0_12px_rgba(251,191,36,0.4)]">
                           {player.displayName?.[0]?.toUpperCase() ?? '?'}
                           <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-amber-500 text-black shadow-md">
                             <Crown size={8} />
@@ -208,13 +205,12 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
                       </div>
                     </div>
                   ) : (
-                  <div className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all ${
+                  <div className={`flex items-center gap-2 rounded-xl px-2.5 py-1.5 transition-all ${
                     hasPlaylist
                       ? 'border border-brand-green/20 bg-brand-green/5'
                       : 'border border-white/6 bg-white/3'
                   }`}>
-                    {/* Avatar */}
-                    <div className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                    <div className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                       hasPlaylist
                         ? 'animate-green-pulse bg-gradient-to-br from-brand-green/30 to-brand-green/10 text-brand-green ring-2 ring-brand-green/40'
                         : 'bg-surface-2 text-white/60'
@@ -260,11 +256,10 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
         </div>
 
         {/* My playlist */}
-        <div className="animate-slide-up space-y-2" style={{ animationDelay: '220ms' }}>
+        <div className="animate-slide-up space-y-1.5" style={{ animationDelay: '220ms' }}>
           {myPlaylist ? (
-            <div className="space-y-2">
-              {/* Connected banner */}
-              <div className="flex items-center justify-between rounded-xl border border-brand-green/30 bg-brand-green/10 px-4 py-3">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between rounded-xl border border-brand-green/30 bg-brand-green/10 px-3 py-2">
                 <div>
                   <p className="text-sm font-semibold text-brand-green">{t('lobby_connected')}</p>
                   <p className="text-xs text-muted">
@@ -355,17 +350,17 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
 
         {/* Round count + Start game — host only */}
         {isHost && (
-          <div className="animate-slide-up space-y-3" style={{ animationDelay: '280ms' }}>
+          <div className="animate-slide-up space-y-2" style={{ animationDelay: '280ms' }}>
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
                 {t('lobby_rounds')}
               </p>
-              <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {ROUND_OPTIONS.map(n => (
                   <button
                     key={n}
                     onClick={() => setRoundCount(n)}
-                    className={`min-w-[40px] sm:min-w-[44px] rounded-xl px-2.5 sm:px-3 py-2 text-xs sm:text-sm font-semibold transition-all active:scale-95 ${
+                    className={`min-w-[36px] sm:min-w-[40px] rounded-lg px-2 sm:px-2.5 py-1.5 text-xs font-semibold transition-all active:scale-95 ${
                       roundCount === n
                         ? 'bg-brand-green text-black'
                         : 'bg-surface-2 text-muted hover:text-white'
@@ -381,13 +376,13 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
               variant="primary"
               className="w-full"
               onClick={() => startGame(roundCount)}
-              disabled={!canStart || loading}
+              disabled={!canStart || loading || preparing}
               title={!canStart ? startDisabledReason : ''}
             >
-              {loading ? (
+              {(loading || preparing) ? (
                 <>
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" />
-                  {t('lobby_building')}
+                  {preparing ? t('preparing_tracks') : t('lobby_building')}
                 </>
               ) : (
                 t('lobby_start_game', { count: roundCount })
@@ -434,16 +429,16 @@ function GameView({ room, currentUser, isHost, onLeave }) {
   if (!round || rounds.length === 0) return <Spinner />
 
   return (
-    <div className="flex min-h-full flex-col px-4 sm:px-5 pt-4 pb-6">
-      <div className="mx-auto w-full max-w-md space-y-3 sm:space-y-4">
+    <div className="flex h-full flex-col overflow-hidden px-4 sm:px-5 pt-3 pb-3">
+      <div className="mx-auto w-full max-w-md space-y-2">
 
         {/* Round header */}
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[10px] sm:text-xs uppercase tracking-widest text-muted">
+            <p className="text-[10px] uppercase tracking-widest text-muted">
               {t('game_round', { current: roundIndex + 1, total: rounds.length })}
             </p>
-            <h1 className="text-base sm:text-xl font-bold">{t('game_whose_song')}</h1>
+            <h1 className="text-sm sm:text-base font-bold">{t('game_whose_song')}</h1>
           </div>
           <button
             onClick={onLeave}
@@ -468,7 +463,9 @@ function GameView({ room, currentUser, isHost, onLeave }) {
         </div>
 
         {/* Live scoreboard */}
-        <div className="rounded-2xl border border-white/8 bg-white/4 px-3 py-2 space-y-1.5">
+        <div className={`rounded-xl border border-white/8 bg-white/4 px-2 py-1.5 ${
+          room.players.length >= 4 ? 'grid grid-cols-2 gap-1' : 'space-y-1'
+        }`}>
           {[...room.players]
             .map(p => ({ ...p, score: room.scores?.[p.uid] ?? 0 }))
             .sort((a, b) => b.score - a.score)
@@ -478,7 +475,7 @@ function GameView({ room, currentUser, isHost, onLeave }) {
               return (
                 <div
                   key={p.uid}
-                  className={`flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 transition-colors ${
+                  className={`flex items-center gap-1.5 rounded-lg px-2 py-1 transition-colors ${
                     isFirst
                       ? 'bg-brand-green/10 border border-brand-green/25'
                       : isMe
@@ -486,25 +483,17 @@ function GameView({ room, currentUser, isHost, onLeave }) {
                         : ''
                   }`}
                 >
-                  <span className="w-4 shrink-0 text-center text-[10px] font-bold text-muted tabular-nums">
-                    {idx + 1}
-                  </span>
-                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
                     isFirst
                       ? 'bg-brand-green/25 text-brand-green ring-1 ring-brand-green/40'
                       : 'bg-surface-2 text-white/60'
                   }`}>
-                    {isFirst ? <Crown size={12} /> : p.displayName?.[0]?.toUpperCase()}
+                    {isFirst ? <Crown size={10} /> : p.displayName?.[0]?.toUpperCase()}
                   </span>
-                  <span className={`min-w-0 flex-1 truncate text-xs font-medium flex items-center gap-1 ${isMe ? 'text-white' : 'text-white/70'}`}>
+                  <span className={`min-w-0 flex-1 truncate text-[11px] font-medium ${isMe ? 'text-white' : 'text-white/70'}`}>
                     {p.displayName}
-                    {p.isPremium && (
-                      <span className="shrink-0 flex items-center gap-0.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-400 px-1 py-px text-[7px] font-black text-black leading-none">
-                        PRO
-                      </span>
-                    )}
                   </span>
-                  <span className="shrink-0 text-xs font-bold tabular-nums text-brand-green transition-all">
+                  <span className="shrink-0 text-[11px] font-bold tabular-nums text-brand-green">
                     {p.score}
                   </span>
                 </div>
@@ -579,7 +568,7 @@ function FinishedView({ room, isHost }) {
   }
 
   return (
-    <div className="flex min-h-full flex-col px-4 sm:px-5 pt-6 pb-6">
+    <div className="flex h-full flex-col overflow-y-auto px-4 sm:px-5 pt-6 pb-6">
       <div className="mx-auto w-full max-w-md space-y-4">
         <ScoreBoard
           players={room.players}

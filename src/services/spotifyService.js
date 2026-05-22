@@ -322,6 +322,23 @@ export async function fetchLikedTracks(accessToken, limit = 500) {
  *
  * @returns {Promise<string|null>} preview URL, or null if nothing found
  */
+export async function fetchDeezerPreview(artist, trackName) {
+  try {
+    const q = `track:"${trackName}" artist:"${artist}"`
+    const url = `https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=1`
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
+    const res = await fetch(url, { signal: controller.signal })
+    clearTimeout(timeout)
+    if (!res.ok) return null
+    const data = await res.json()
+    return data?.data?.[0]?.preview || null
+  } catch (err) {
+    console.warn('[fetchDeezerPreview] failed:', err.message)
+    return null
+  }
+}
+
 export async function fetchItunesPreview(artist, trackName) {
   try {
     const term = encodeURIComponent(`${artist} ${trackName}`)

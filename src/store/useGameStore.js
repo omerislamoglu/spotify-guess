@@ -26,11 +26,41 @@ import {
   POINTS_CORRECT_GUESS,
   POINTS_WRONG_GUESS,
 } from '../services/gameService'
-import { fetchPlaylistTracks, fetchRecentlyPlayedTracks, fetchLikedTracks } from '../services/spotifyService'
+import { fetchPlaylistTracks, fetchRecentlyPlayedTracks, fetchLikedTracks, fetchDeezerPreview, fetchItunesPreview } from '../services/spotifyService'
 import useAuthStore from './useAuthStore'
+import useEnergyStore from './useEnergyStore'
+import { ENERGY_PER_GAME } from '../services/energyService'
 
 const AUTO_REVEAL_DELAY_MS = 800
 const AUTO_ADVANCE_DELAY_MS = 4000
+const PREVIEW_BATCH_SIZE = 10
+const MIN_PLAYABLE_TRACKS = 3
+
+async function resolveTrackPreview(track) {
+  if (track.previewUrl) return track.previewUrl
+  try {
+    const deezer = await fetchDeezerPreview(track.artists, track.name)
+    if (deezer) return deezer
+  } catch {}
+  try {
+    const itunes = await fetchItunesPreview(track.artists, track.name)
+    if (itunes) return itunes
+  } catch {}
+  return null
+}
+
+async function resolvePlaylistPreviews(tracks) {
+  const result = []
+  for (let i = 0; i < tracks.length; i += PREVIEW_BATCH_SIZE) {
+    const batch = tracks.slice(i, i + PREVIEW_BATCH_SIZE)
+    const checked = await Promise.all(batch.map(async (track) => {
+      const url = await resolveTrackPreview(track)
+      return url ? { ...track, previewUrl: url } : null
+    }))
+    result.push(...checked.filter(Boolean))
+  }
+  return result
+}
 
 function getOwnerIds(round) {
   return round?.ownerIds ?? (round?.ownerId ? [round.ownerId] : [])
@@ -163,6 +193,7 @@ function buildRounds(playerPlaylists, roundCount = ROUND_COUNT) {
 const useGameStore = create((set, get) => ({
   room:         null,
   loading:      false,
+  preparing:    false,
   error:        null,
   _unsubscribe: null,
   _autoRevealRounds: new Set(),
@@ -307,6 +338,13 @@ const useGameStore = create((set, get) => ({
     const { room } = get()
     if (!room) return
 
+    const uid = useAuthStore.getState().firebaseUser?.uid
+    const energy = useEnergyStore.getState().energy
+    if (energy < ENERGY_PER_GAME) {
+      toast.error(t('energy_insufficient_start'))
+      return
+    }
+
     const playerPlaylists = room.playerPlaylists ?? {}
     const connectedCount  = Object.keys(playerPlaylists).length
 
@@ -315,22 +353,44 @@ const useGameStore = create((set, get) => ({
       return
     }
 
-    const rounds = buildRounds(playerPlaylists, roundCount)
-    if (rounds.length < 1) {
-      set({ error: 'Not enough tracks to build rounds. Connect playlists with more songs.' })
-      return
-    }
-
-    if (rounds.length < roundCount) {
-      toast(t('lobby_fewer_rounds', { count: rounds.length }), { duration: 5000 })
-    }
-
-    set({ loading: true, error: null })
+    set({ preparing: true, error: null })
     try {
+      const resolvedPlaylists = {}
+      for (const [pUid, playlist] of Object.entries(playerPlaylists)) {
+        const capped = playlist.tracks.slice(0, MAX_TRACKS_PER_PLAYER)
+        const playable = await resolvePlaylistPreviews(capped)
+        if (playable.length < MIN_PLAYABLE_TRACKS) {
+          const player = room.players.find(p => p.uid === pUid)
+          set({ preparing: false, error: t('insufficient_previews', { name: player?.displayName ?? pUid, min: MIN_PLAYABLE_TRACKS }) })
+          return
+        }
+        resolvedPlaylists[pUid] = { ...playlist, tracks: playable }
+      }
+      set({ preparing: false })
+
+      const rounds = buildRounds(resolvedPlaylists, roundCount)
+      if (rounds.length < 1) {
+        set({ error: 'Not enough tracks to build rounds. Connect playlists with more songs.' })
+        return
+      }
+
+      if (rounds.length < roundCount) {
+        toast(t('lobby_fewer_rounds', { count: rounds.length }), { duration: 5000 })
+      }
+
+      set({ loading: true, error: null })
+      if (uid) {
+        const allowed = await useEnergyStore.getState().consumeEnergy(uid, ENERGY_PER_GAME)
+        if (!allowed) {
+          toast.error(t('energy_insufficient_start'))
+          set({ loading: false })
+          return
+        }
+      }
       await fsStartGame(room.id, rounds)
       set({ loading: false })
     } catch (err) {
-      set({ error: err.message, loading: false })
+      set({ error: err.message, loading: false, preparing: false })
     }
   },
 
