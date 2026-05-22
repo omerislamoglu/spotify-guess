@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app'
 import { initializeAuth, getAuth, browserLocalPersistence, indexedDBLocalPersistence } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
+import { getFunctions } from 'firebase/functions'
 import { Capacitor } from '@capacitor/core'
 
 const firebaseConfig = {
@@ -20,3 +21,4 @@ export const auth = Capacitor.isNativePlatform()
   : getAuth(app)
 
 export const db = getFirestore(app)
+export const functions = getFunctions(app)

@@ -21,6 +21,7 @@ import {
   fetchEnergy,
   consumeEnergy     as fsConsumeEnergy,
   refillEnergy      as fsRefillEnergy,
+  addEnergy         as fsAddEnergy,
   addDiamonds       as fsAddDiamonds,
   addGold           as fsAddGold,
   convertDiamondsToEnergy as fsConvert,
@@ -111,6 +112,23 @@ const useEnergyStore = create((set, get) => ({
    */
   canAfford: (amount = ENERGY_PER_GAME) => {
     return get().energy >= amount
+  },
+
+  /**
+   * Add energy atomically (for ad reward or refund).
+   * @param {number} cap — if > 0, clamp result to this max (0 = no cap)
+   */
+  addEnergy: async (uid, amount, cap = 0) => {
+    set({ loading: true })
+    try {
+      const newEnergy = await fsAddEnergy(uid, amount, cap)
+      set({ energy: newEnergy, energyDepletedAt: null, loading: false })
+      return newEnergy
+    } catch (err) {
+      console.error('[energyStore] addEnergy failed:', err.message)
+      set({ loading: false })
+      throw err
+    }
   },
 
   // ── Diamonds ───────────────────────────────────────────────────────────────

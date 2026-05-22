@@ -24,6 +24,8 @@ export default function Login() {
   const { firebaseUser, loading, error, startSpotifyAuth, handleSpotifyCallback } =
     useAuthStore()
 
+  const returnTo = searchParams.get('returnTo') || '/dashboard'
+
   useEffect(() => {
     const authError = searchParams.get('error')
     if (authError) {
@@ -35,14 +37,14 @@ export default function Login() {
     const state = searchParams.get('state')
     if (code && state) {
       handleSpotifyCallback(code, state)
-        .then(() => navigate('/dashboard', { replace: true }))
+        .then(() => navigate(returnTo, { replace: true }))
         .catch(() => {})
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!loading && firebaseUser) navigate('/dashboard', { replace: true })
-  }, [firebaseUser, loading, navigate])
+    if (!loading && firebaseUser) navigate(returnTo, { replace: true })
+  }, [firebaseUser, loading, navigate, returnTo])
 
   const steps = [
     { step: '1', icon: <Music      size={15} className="shrink-0 text-brand-green" />, text: t('login_step1') },

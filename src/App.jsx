@@ -13,6 +13,7 @@ import Login from './pages/Login'
 import SpotifyCallback from './pages/SpotifyCallback'
 import Dashboard from './pages/Dashboard'
 import Room from './pages/Room'
+import JoinRoom from './pages/JoinRoom'
 
 // Listens for spotifyguess://spotify-callback?code=...&state=... deep links
 // and runs the OAuth callback flow directly inside the app.
@@ -24,7 +25,14 @@ function DeepLinkHandler() {
     if (!Capacitor.isNativePlatform()) return
 
     const listener = CapApp.addListener('appUrlOpen', async ({ url }) => {
-      // e.g. spotifyguess://spotify-callback?code=ABC&state=XYZ
+      // spotifyguess://join/ABC123 or https://...web.app/join/ABC123
+      const joinMatch = url.match(/\/join\/([A-Z0-9]+)/i)
+      if (joinMatch) {
+        navigate(`/join/${joinMatch[1].toUpperCase()}`)
+        return
+      }
+
+      // spotifyguess://spotify-callback?code=ABC&state=XYZ
       let parsed
       try { parsed = new URL(url) } catch { return }
       const code   = parsed.searchParams.get('code')
@@ -36,7 +44,6 @@ function DeepLinkHandler() {
         } catch {
           // Error is set in the store
         } finally {
-          // Close the in-app browser after auth completes (success or fail)
           Browser.close().catch(() => {})
         }
       }
@@ -79,6 +86,7 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard"    element={<Dashboard />} />
             <Route path="/room/:roomId" element={<Room />} />
+            <Route path="/join/:code"   element={<JoinRoom />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/login" replace />} />

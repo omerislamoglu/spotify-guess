@@ -1,12 +1,9 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import useAuthStore from '../../store/useAuthStore'
 
-/**
- * Wrap any route that requires a Firebase login.
- * Shows nothing while auth state is loading to prevent flash-redirects.
- */
 export default function ProtectedRoute() {
   const { firebaseUser, loading } = useAuthStore()
+  const location = useLocation()
 
   if (loading) {
     return (
@@ -16,5 +13,10 @@ export default function ProtectedRoute() {
     )
   }
 
-  return firebaseUser ? <Outlet /> : <Navigate to="/login" replace />
+  if (!firebaseUser) {
+    const returnTo = location.pathname + location.search
+    return <Navigate to={`/login?returnTo=${encodeURIComponent(returnTo)}`} replace />
+  }
+
+  return <Outlet />
 }

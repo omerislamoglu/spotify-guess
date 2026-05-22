@@ -34,6 +34,7 @@ export default function useEnergy() {
   const loading          = useEnergyStore(s => s.loading)
   const consume          = useEnergyStore(s => s.consumeEnergy)
   const refill           = useEnergyStore(s => s.refillEnergy)
+  const addEn            = useEnergyStore(s => s.addEnergy)
   const addDia           = useEnergyStore(s => s.addDiamonds)
   const addGoldFn        = useEnergyStore(s => s.addGold)
   const buyEnergy        = useEnergyStore(s => s.buyEnergyWithDiamonds)
@@ -65,6 +66,11 @@ export default function useEnergy() {
     refillEnergy: async (amount = MAX_ENERGY) => {
       if (!uid) return
       return refill(uid, amount)
+    },
+
+    addEnergy: async (amount, cap = 0) => {
+      if (!uid) return
+      return addEn(uid, amount, cap)
     },
 
     addDiamonds: async (amount) => {

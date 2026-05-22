@@ -14,6 +14,7 @@ import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import { showInterstitial } from '../services/adService'
 import { t } from '../i18n'
+import { shareRoom } from '../utils/shareRoom'
 
 // ─── Spinner ──────────────────────────────────────────────────────────────────
 
@@ -27,27 +28,13 @@ function Spinner() {
 
 // ─── Invite / Share button ────────────────────────────────────────────────────
 
-function InviteButton({ roomId, code }) {
-  const [copied, setCopied] = useState(false)
+function InviteButton({ code }) {
+  const [shared, setShared] = useState(false)
 
   const handleShare = async () => {
-    const url  = `${window.location.origin}/room/${roomId}`
-    const text = t('lobby_invite_text', { code })
-
-    if (navigator.share) {
-      // Native iOS/Android share sheet (WhatsApp, iMessage, etc.)
-      try {
-        await navigator.share({ title: 'EchoGuess', text, url })
-      } catch {
-        // User cancelled — no-op
-      }
-    } else {
-      // Desktop fallback: copy link
-      await navigator.clipboard.writeText(`${text}\n${url}`)
-      setCopied(true)
-      toast.success(t('lobby_invite_copied'))
-      setTimeout(() => setCopied(false), 2500)
-    }
+    await shareRoom(code)
+    setShared(true)
+    setTimeout(() => setShared(false), 2500)
   }
 
   return (
@@ -55,7 +42,7 @@ function InviteButton({ roomId, code }) {
       onClick={handleShare}
       className="flex min-h-11 items-center gap-1.5 rounded-full border border-surface-2 px-3 py-2 text-xs font-medium text-muted transition-all hover:border-brand-green/40 hover:text-white active:scale-95"
     >
-      {copied
+      {shared
         ? <><Check size={13} className="text-brand-green" /> {t('lobby_copied')}</>
         : <><Share2 size={13} /> {t('lobby_share')}</>}
     </button>
@@ -129,7 +116,7 @@ function LobbyView({ room, currentUser, isHost, onLeave }) {
             <h1 className="text-lg sm:text-xl font-bold">{t('lobby_room', { code: room.code })}</h1>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <InviteButton roomId={room.id} code={room.code} />
+            <InviteButton code={room.code} />
             <button
               onClick={onLeave}
               className="flex min-h-10 items-center rounded-full border border-surface-2 px-2.5 py-1.5 text-[11px] text-muted transition-colors hover:text-white active:scale-95"

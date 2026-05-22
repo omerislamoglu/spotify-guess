@@ -3,6 +3,8 @@ import { X, Gem, Zap, ShoppingBag, Sparkles, ArrowRightLeft, Play, Coins } from 
 import toast from 'react-hot-toast'
 import { t } from '../../i18n'
 import useEnergy from '../../hooks/useEnergy'
+import useAuthStore from '../../store/useAuthStore'
+import useEnergyStore from '../../store/useEnergyStore'
 import usePremiumStore from '../../store/usePremiumStore'
 import { DIAMOND_PACKAGES, ENERGY_PACKAGES, GOLD_PACKAGES, ENERGY_PER_GAME } from '../../services/energyService'
 import { purchaseDiamonds, getDiamondPackages } from '../../services/purchaseService'
@@ -122,7 +124,7 @@ export default function ShopModal({ onClose }) {
   const [tab, setTab] = useState('diamonds') // 'diamonds' | 'energy' | 'gold'
   const [adLoading, setAdLoading] = useState(false)
   const [purchasing, setPurchasing] = useState(false)
-  const { diamonds, gold, energy, maxEnergy, loading, isPremium, addDiamonds, buyEnergyWithDiamonds, buyDiamondsWithGold, refillEnergy } = useEnergy()
+  const { diamonds, gold, energy, maxEnergy, loading, isPremium, addEnergy, buyEnergyWithDiamonds, buyDiamondsWithGold, refillEnergy } = useEnergy()
 
   // Fetch RevenueCat offerings for diamond prices
   const offerings = usePremiumStore(s => s.offerings)
@@ -151,8 +153,11 @@ export default function ShopModal({ onClose }) {
     try {
       const { purchased, diamonds: diamondCount } = await purchaseDiamonds(rcPkg)
       if (purchased && diamondCount > 0) {
-        await addDiamonds(diamondCount)
+        // Diamonds are credited server-side via RevenueCat webhook.
+        // Re-fetch balances so the UI updates once the webhook processes.
         toast.success(t('shop_diamonds_purchased', { count: diamondCount }))
+        const uid = useAuthStore.getState().user?.uid
+        if (uid) useEnergyStore.getState().loadEnergy(uid)
       } else if (!purchased) {
         // User cancelled — no toast needed
       }
@@ -168,7 +173,8 @@ export default function ShopModal({ onClose }) {
       const { energy: newEnergy } = await buyEnergyWithDiamonds(pkg.id)
       toast.success(t('shop_energy_purchased', { gain: pkg.energyGain, total: newEnergy }))
     } catch (err) {
-      if (err.message === 'NOT_ENOUGH_DIAMONDS') {
+      const msg = err.message ?? ''
+      if (msg.includes('insufficient_diamonds') || msg === 'NOT_ENOUGH_DIAMONDS') {
         toast.error(t('shop_not_enough_diamonds'))
       } else {
         toast.error(t('shop_exchange_failed'))
@@ -181,7 +187,8 @@ export default function ShopModal({ onClose }) {
     try {
       const rewarded = await showRewardedAd()
       if (rewarded) {
-        await refillEnergy(Math.min(energy + ENERGY_PER_GAME, 10))
+        // Add energy atomically, capped at MAX_ENERGY (no overflow from ads)
+        await addEnergy(ENERGY_PER_GAME, maxEnergy)
         toast.success(t('shop_energy_from_ad', { gain: ENERGY_PER_GAME }))
       } else {
         toast.error(t('shop_ad_watch_full'))
@@ -198,7 +205,8 @@ export default function ShopModal({ onClose }) {
       const { diamonds: newDiamonds } = await buyDiamondsWithGold(pkg.id)
       toast.success(t('shop_diamonds_from_gold', { gain: pkg.diamondGain, total: newDiamonds }))
     } catch (err) {
-      if (err.message === 'NOT_ENOUGH_GOLD') {
+      const msg = err.message ?? ''
+      if (msg.includes('insufficient_gold') || msg === 'NOT_ENOUGH_GOLD') {
         toast.error(t('shop_not_enough_gold'))
       } else {
         toast.error(t('shop_exchange_failed'))

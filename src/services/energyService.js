@@ -28,7 +28,8 @@ import {
   runTransaction,
   Timestamp,
 } from 'firebase/firestore'
-import { db } from './firebase'
+import { db, functions } from './firebase'
+import { httpsCallable } from 'firebase/functions'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -178,6 +179,37 @@ export async function refillEnergy(uid, amount = MAX_ENERGY) {
   return newEnergy
 }
 
+/**
+ * Add energy atomically (e.g. after watching a reward ad or refunding a failed room).
+ * Unlike refillEnergy (which sets a fixed value), this adds to the current balance.
+ * Clears energyDepletedAt since the user now has energy again.
+ *
+ * @param {string} uid
+ * @param {number} amount — energy to add
+ * @param {number} [cap=0] — if > 0, clamp the result to this max (0 = no cap, allows overflow)
+ * @returns {number} new energy value
+ */
+export async function addEnergy(uid, amount, cap = 0) {
+  const ref = doc(db, 'users', uid)
+
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref)
+    const data = snap.exists() ? snap.data() : {}
+    const current = data.energy ?? 0
+
+    let newEnergy = current + amount
+    if (cap > 0) newEnergy = Math.min(newEnergy, cap)
+
+    tx.set(ref, {
+      energy:           newEnergy,
+      energyDepletedAt: null,
+      lastEnergyUpdate: serverTimestamp(),
+    }, { merge: true })
+
+    return newEnergy
+  })
+}
+
 // ─── Diamonds ────────────────────────────────────────────────────────────────
 
 /**
@@ -209,46 +241,21 @@ export async function fetchDiamonds(uid) {
 // ─── Diamond → Energy Conversion ─────────────────────────────────────────────
 
 /**
- * Convert diamonds to energy atomically.
+ * Convert diamonds to energy via Cloud Function (spendDiamonds).
+ * The server handles the atomic transaction to prevent client-side diamond manipulation.
  *
- * Overflow logic: energy can temporarily exceed MAX_ENERGY when buying
- * the 30-energy pack. The cap is MAX_ENERGY only for natural refills.
- * Clears energyDepletedAt since the user now has energy again.
- *
- * @param {string} uid
+ * @param {string} _uid — unused (auth is handled by the callable)
  * @param {string} packageId — one of ENERGY_PACKAGES[].id
  * @returns {{ energy: number, diamonds: number }} new balances
  * @throws if insufficient diamonds or invalid package
  */
-export async function convertDiamondsToEnergy(uid, packageId) {
+export async function convertDiamondsToEnergy(_uid, packageId) {
   const pkg = ENERGY_PACKAGES.find(p => p.id === packageId)
   if (!pkg) throw new Error('INVALID_PACKAGE')
 
-  const ref = doc(db, 'users', uid)
-
-  return runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref)
-    const data = snap.exists() ? snap.data() : {}
-
-    const currentDiamonds = data.diamonds ?? 0
-    const currentEnergy   = data.energy   ?? MAX_ENERGY
-
-    if (currentDiamonds < pkg.diamondCost) {
-      throw new Error('NOT_ENOUGH_DIAMONDS')
-    }
-
-    const newDiamonds = currentDiamonds - pkg.diamondCost
-    const newEnergy   = currentEnergy + pkg.energyGain
-
-    tx.set(ref, {
-      diamonds:         newDiamonds,
-      energy:           newEnergy,
-      energyDepletedAt: null,          // clear countdown — user has energy now
-      lastEnergyUpdate: serverTimestamp(),
-    }, { merge: true })
-
-    return { energy: newEnergy, diamonds: newDiamonds }
-  })
+  const spendDiamonds = httpsCallable(functions, 'spendDiamonds')
+  const result = await spendDiamonds({ packageId })
+  return result.data
 }
 
 // ─── Gold ────────────────────────────────────────────────────────────────────
@@ -271,35 +278,19 @@ export async function addGold(uid, amount) {
 }
 
 /**
- * Convert gold to diamonds atomically.
+ * Convert gold to diamonds via Cloud Function (exchangeGoldForDiamonds).
+ * The server handles the atomic transaction to prevent client-side diamond manipulation.
  *
- * @param {string} uid
+ * @param {string} _uid — unused (auth is handled by the callable)
  * @param {string} packageId — one of GOLD_PACKAGES[].id
  * @returns {{ gold: number, diamonds: number }} new balances
  * @throws if insufficient gold or invalid package
  */
-export async function convertGoldToDiamonds(uid, packageId) {
+export async function convertGoldToDiamonds(_uid, packageId) {
   const pkg = GOLD_PACKAGES.find(p => p.id === packageId)
   if (!pkg) throw new Error('INVALID_PACKAGE')
 
-  const ref = doc(db, 'users', uid)
-
-  return runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref)
-    const data = snap.exists() ? snap.data() : {}
-
-    const currentGold     = data.gold ?? 0
-    const currentDiamonds = data.diamonds ?? 0
-
-    if (currentGold < pkg.goldCost) {
-      throw new Error('NOT_ENOUGH_GOLD')
-    }
-
-    const newGold     = currentGold - pkg.goldCost
-    const newDiamonds = currentDiamonds + pkg.diamondGain
-
-    tx.set(ref, { gold: newGold, diamonds: newDiamonds }, { merge: true })
-
-    return { gold: newGold, diamonds: newDiamonds }
-  })
+  const exchange = httpsCallable(functions, 'exchangeGoldForDiamonds')
+  const result = await exchange({ packageId })
+  return result.data
 }

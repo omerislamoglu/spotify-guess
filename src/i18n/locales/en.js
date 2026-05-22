@@ -195,4 +195,15 @@ export default {
   error_spotify_session_expired: 'Spotify session expired. Please reconnect.',
   error_generic: 'Something went wrong.',
   error_spotify_auth: 'Spotify login failed. Please try again.',
+  error_purchase_network: 'Network issue. Please try again.',
+  error_purchase_store: 'Could not reach the store.',
+  error_purchase_not_allowed: 'Purchases are not allowed on this device.',
+  premium_mobile_only: 'Premium purchases are only available in the mobile app.',
+  premium_activating: 'Activating premium...',
+
+  // ── Share / Join ──────────────────────────────────────────────────────────
+  share_room_message: 'Join me on Spotify Guess! 🎵\n{url}',
+  share_link_copied: 'Link copied!',
+  join_joining_room: 'Joining room {code}...',
+  join_room_not_found: 'Room not found or already started.',
 }

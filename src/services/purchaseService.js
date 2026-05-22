@@ -116,6 +116,19 @@ export function getPremiumDiamondReward(pkg) {
   return PREMIUM_DIAMOND_REWARDS[tier] ?? 500
 }
 
+function classifyPurchaseError(err) {
+  const code = err.code ?? err.userCancelled ? 1 : -1
+  if (code === 1 || err.message?.includes('cancel'))
+    return { type: 'cancelled', message: 'User cancelled.' }
+  if (code === 2)
+    return { type: 'store_error', message: err.message ?? 'Store problem.' }
+  if (code === 3)
+    return { type: 'not_allowed', message: err.message ?? 'Purchases not allowed.' }
+  if (code === 5)
+    return { type: 'network', message: err.message ?? 'Network error.' }
+  return { type: 'unknown', message: err.message ?? 'Unknown error.', original: err }
+}
+
 /**
  * Purchase a premium subscription package.
  * @param {object} pkg — a RevenueCat package object from getOfferings()
@@ -133,8 +146,7 @@ export async function purchasePremium(pkg) {
     console.log('[RC] purchasePremium: granted=', granted, 'diamonds=', diamonds)
     return { granted: true, diamonds }   // purchase completed → always grant
   } catch (err) {
-    if (err.code === 1 || err.message?.includes('cancel')) return { granted: false, diamonds: 0 }
-    throw err
+    throw classifyPurchaseError(err)
   }
 }
 
@@ -152,6 +164,16 @@ export async function restorePurchases() {
   } catch {
     return { granted: false, diamonds: 0 }
   }
+}
+
+export async function logOutPurchases() {
+  if (!Capacitor.isNativePlatform() || !initialized) return
+  try {
+    await Purchases.logOut()
+  } catch (err) {
+    console.warn('[RC] logOut failed:', err?.message)
+  }
+  initialized = false
 }
 
 // ── Diamonds (consumable) ───────────────────────────────────────────────────
@@ -190,10 +212,7 @@ export async function purchaseDiamonds(pkg) {
 
     return { purchased: true, internalId, diamonds }
   } catch (err) {
-    if (err.code === 1 || err.message?.includes('cancel')) {
-      return { purchased: false, internalId: null, diamonds: 0 }
-    }
-    throw err
+    throw classifyPurchaseError(err)
   }
 }
 

@@ -195,4 +195,15 @@ export default {
   error_spotify_session_expired: 'Spotify oturumun sona erdi. Lütfen tekrar bağlan.',
   error_generic: 'Bir hata oluştu.',
   error_spotify_auth: 'Spotify girişi başarısız oldu. Lütfen tekrar dene.',
+  error_purchase_network: 'Bağlantı sorunu. Lütfen tekrar dene.',
+  error_purchase_store: 'Mağaza ile bağlantı kurulamadı.',
+  error_purchase_not_allowed: 'Bu cihazda satın alma yapılamıyor.',
+  premium_mobile_only: 'Premium satın alma sadece mobil uygulamada mevcut.',
+  premium_activating: 'Premium aktif ediliyor...',
+
+  // ── Share / Join ──────────────────────────────────────────────────────────
+  share_room_message: "Spotify Guess'te bana katıl! 🎵\n{url}",
+  share_link_copied: 'Link kopyalandı!',
+  join_joining_room: '{code} odasına katılınıyor...',
+  join_room_not_found: 'Oda bulunamadı veya oyun başlamış.',
 }

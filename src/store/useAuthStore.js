@@ -33,6 +33,8 @@ import {
   refreshAccessToken,
   fetchSpotifyProfile,
 } from '../services/spotifyService'
+import { logOutPurchases } from '../services/purchaseService'
+import usePremiumStore from './usePremiumStore'
 
 const useAuthStore = create(
   persist(
@@ -141,9 +143,9 @@ const useAuthStore = create(
       // ── Session ────────────────────────────────────────────────────────────
 
       signOut: async () => {
+        await logOutPurchases()
+        usePremiumStore.getState().reset()
         await firebaseSignOut(auth)
-        // Clear persisted Zustand state and any leftover PKCE / OAuth artefacts
-        // so the next login always starts fresh with the full scope set.
         localStorage.clear()
         sessionStorage.clear()
         set({ firebaseUser: null, spotifyToken: null, spotifyProfile: null })

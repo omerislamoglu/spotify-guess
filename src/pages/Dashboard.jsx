@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Capacitor } from '@capacitor/core'
 import { PlusCircle, Users, LogOut, Crown, X, ShieldCheck, Gem, ShoppingBag, RotateCcw, Zap } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { t } from '../i18n'
@@ -8,8 +9,6 @@ import useGameStore from '../store/useGameStore'
 import usePremiumStore from '../store/usePremiumStore'
 import useEnergy from '../hooks/useEnergy'
 import { PREMIUM_PRODUCT_MAP } from '../services/purchaseService'
-import { addDiamonds as fsAddDiamonds } from '../services/energyService'
-import useEnergyStore from '../store/useEnergyStore'
 
 // Update these with your real URLs before App Store submission
 const PRIVACY_URL = import.meta.env.VITE_PRIVACY_URL ?? '#'
@@ -61,11 +60,16 @@ const PLANS = [
 // ─── Premium Modal ───────────────────────────────────────────────────────────
 
 function PremiumModal({ onClose }) {
-  const { isPremium, loading, premiumPackages, loadOfferings, purchase, restore, init } = usePremiumStore()
+  const { isPremium, loading, activating, premiumPackages, loadOfferings, purchase, restore, init } = usePremiumStore()
   const [restoring, setRestoring] = useState(false)
+  const offeringsLoaded = useRef(false)
+  const isWeb = Capacitor.getPlatform() === 'web'
 
   useEffect(() => {
-    loadOfferings()
+    if (!offeringsLoaded.current) {
+      offeringsLoaded.current = true
+      loadOfferings()
+    }
   }, [loadOfferings])
 
   // For display only — uses current React state to show RC price string
@@ -105,36 +109,24 @@ function PremiumModal({ onClose }) {
 
       const result = await purchase(rcPkg)
       if (result?.granted) {
-        // Credit diamonds using a fresh uid — bypasses any stale hook closure
-        if (result.diamonds > 0) {
-          const uid = useAuthStore.getState().firebaseUser?.uid
-          if (uid) {
-            try {
-              const newCount = await fsAddDiamonds(uid, result.diamonds)
-              useEnergyStore.getState().loadEnergy(uid)   // sync local state
-              console.log('[Premium] diamonds credited:', newCount)
-            } catch (err) {
-              console.error('[Premium] diamond credit failed:', err?.message)
-              // Still show welcome — premium IS active; user can contact support for diamonds
-            }
-          }
-          toast.success(t('premium_welcome_diamonds', { diamonds: result.diamonds }))
-        } else {
-          toast.success(t('premium_welcome'))
-        }
-        onClose()
+        toast.success(t('premium_activating'))
       }
-    } catch {
-      toast.error(t('premium_purchase_failed'))
+    } catch (err) {
+      if (err.type === 'cancelled') return
+      if (err.type === 'network')      toast.error(t('error_purchase_network'))
+      else if (err.type === 'store_error')  toast.error(t('error_purchase_store'))
+      else if (err.type === 'not_allowed')  toast.error(t('error_purchase_not_allowed'))
+      else                                  toast.error(t('premium_purchase_failed'))
     }
   }
 
   const handleRestore = async () => {
     setRestoring(true)
     try {
-      // Re-initialize RC with fresh uid before restoring — covers reinstall / new device
       const uid = useAuthStore.getState().firebaseUser?.uid
       if (uid) await init(uid)
+      offeringsLoaded.current = false
+      loadOfferings()
       const result = await restore()
       if (result?.granted) {
         toast.success(t('premium_restored'))
@@ -208,63 +200,73 @@ function PremiumModal({ onClose }) {
         </div>
 
         {/* ── Plans ─────────────────────────────────────────────────────────── */}
-        <div className="space-y-2.5 px-5 pb-2">
-          {PLANS.map((plan) => {
-            const rcPkg       = rcPackageFor(plan.id)
-            const priceLabel  = rcPkg?.product?.priceString ?? plan.fallbackPrice
-            const isHighlight = plan.highlight
+        {isWeb ? (
+          <div className="mx-5 mb-2 rounded-2xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-center text-sm text-amber-300/70">
+            {t('premium_mobile_only')}
+          </div>
+        ) : (
+          <div className="space-y-2.5 px-5 pb-2">
+            {PLANS.map((plan) => {
+              const rcPkg       = rcPackageFor(plan.id)
+              const priceLabel  = rcPkg?.product?.priceString ?? plan.fallbackPrice
+              const isHighlight = plan.highlight
 
-            return (
-              <button
-                key={plan.id}
-                onClick={() => handlePurchase(plan.id)}
-                disabled={loading}
-                className={`group relative w-full rounded-2xl border p-4 text-left transition-all active:scale-[0.98] disabled:opacity-50 ${
-                  isHighlight
-                    ? 'border-amber-400/50 bg-gradient-to-br from-amber-500/20 to-amber-700/10 shadow-lg shadow-amber-500/10 hover:border-amber-400/70'
-                    : 'border-white/8 bg-white/4 hover:border-white/15 hover:bg-white/6'
-                }`}
-              >
-                {/* Badge */}
-                {plan.badgeKey && (
-                  <span className={`absolute -top-2.5 left-4 rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-wide ${
-                    isHighlight ? 'bg-amber-400 text-black' : 'bg-white/15 text-white/70'
-                  }`}>
-                    {t(plan.badgeKey)}
-                  </span>
-                )}
-
-                <div className="flex items-center justify-between gap-3">
-                  {/* Left: icon + info */}
-                  <div className="flex items-center gap-3">
-                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
-                      isHighlight ? 'bg-amber-400/20' : 'bg-white/8'
-                    }`}>
-                      <Gem size={20} className={isHighlight ? 'text-amber-400' : 'text-white/50'} />
-                    </div>
-                    <div>
-                      <p className={`text-sm font-bold ${isHighlight ? 'text-amber-300' : 'text-white'}`}>
-                        {t(plan.titleKey)}
-                      </p>
-                      <p className="mt-0.5 text-xs text-white/40">
-                        +{plan.diamonds.toLocaleString()} {t('shop_diamonds').toLowerCase()}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Right: price */}
-                  <div className={`shrink-0 rounded-xl px-3.5 py-2 text-sm font-bold ${
+              return (
+                <button
+                  key={plan.id}
+                  onClick={() => handlePurchase(plan.id)}
+                  disabled={loading}
+                  className={`group relative w-full rounded-2xl border p-4 text-left transition-all active:scale-[0.98] disabled:opacity-50 ${
                     isHighlight
-                      ? 'bg-amber-400/20 text-amber-300'
-                      : 'bg-white/8 text-white/70'
-                  }`}>
-                    {priceLabel}
+                      ? 'border-amber-400/50 bg-gradient-to-br from-amber-500/20 to-amber-700/10 shadow-lg shadow-amber-500/10 hover:border-amber-400/70'
+                      : 'border-white/8 bg-white/4 hover:border-white/15 hover:bg-white/6'
+                  }`}
+                >
+                  {plan.badgeKey && (
+                    <span className={`absolute -top-2.5 left-4 rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-wide ${
+                      isHighlight ? 'bg-amber-400 text-black' : 'bg-white/15 text-white/70'
+                    }`}>
+                      {t(plan.badgeKey)}
+                    </span>
+                  )}
+
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
+                        isHighlight ? 'bg-amber-400/20' : 'bg-white/8'
+                      }`}>
+                        <Gem size={20} className={isHighlight ? 'text-amber-400' : 'text-white/50'} />
+                      </div>
+                      <div>
+                        <p className={`text-sm font-bold ${isHighlight ? 'text-amber-300' : 'text-white'}`}>
+                          {t(plan.titleKey)}
+                        </p>
+                        <p className="mt-0.5 text-xs text-white/40">
+                          +{plan.diamonds.toLocaleString()} {t('shop_diamonds').toLowerCase()}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className={`shrink-0 rounded-xl px-3.5 py-2 text-sm font-bold ${
+                      isHighlight
+                        ? 'bg-amber-400/20 text-amber-300'
+                        : 'bg-white/8 text-white/70'
+                    }`}>
+                      {priceLabel}
+                    </div>
                   </div>
-                </div>
-              </button>
-            )
-          })}
-        </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {activating && (
+          <div className="mx-5 mt-3 flex items-center justify-center gap-2 rounded-2xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm text-amber-300/70">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-400/30 border-t-amber-400" />
+            {t('premium_activating')}
+          </div>
+        )}
 
         {/* ── Active state benefits list ─────────────────────────────────────── */}
         {isPremium && (
@@ -344,7 +346,7 @@ export default function Dashboard() {
   const { firebaseUser, spotifyProfile, signOut } = useAuthStore()
   const { createRoom, joinRoom, loading, error, clearError } = useGameStore()
   const isPremium = usePremiumStore(s => s.isPremium)
-  const { canPlay, costPerGame, consumeEnergy } = useEnergy()
+  const { canPlay, costPerGame, consumeEnergy, addEnergy } = useEnergy()
 
   const displayName = spotifyProfile?.displayName ?? firebaseUser?.displayName ?? 'there'
 
@@ -366,7 +368,13 @@ export default function Dashboard() {
       return
     }
     const roomId = await createRoom(player)
-    if (roomId) navigate(`/room/${roomId}`)
+    if (roomId) {
+      navigate(`/room/${roomId}`)
+    } else {
+      // Room creation failed — refund the consumed energy
+      await addEnergy(costPerGame)
+      toast.error(t('dash_room_failed_refund'))
+    }
   }
 
   const handleJoin = async (e) => {
@@ -382,7 +390,13 @@ export default function Dashboard() {
       return
     }
     const roomId = await joinRoom(joinCode.trim(), player)
-    if (roomId) navigate(`/room/${roomId}`)
+    if (roomId) {
+      navigate(`/room/${roomId}`)
+    } else {
+      // Join failed — refund the consumed energy
+      await addEnergy(costPerGame)
+      toast.error(t('dash_room_failed_refund'))
+    }
   }
 
   const handleSignOut = async () => {

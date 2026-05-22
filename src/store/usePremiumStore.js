@@ -1,22 +1,7 @@
-/**
- * Premium Store — Zustand
- *
- * Tracks the user's premium status and RevenueCat offerings.
- * Persisted to localStorage so the app remembers premium state
- * between launches (verified on startup via RevenueCat).
- *
- * Cross-platform sync:
- *  - On native (iOS/Android): RevenueCat is the source of truth.
- *    After a purchase or restore, isPremium is also written to Firestore
- *    so other platforms can read it.
- *  - On web: RevenueCat is not available, so isPremium falls back to
- *    reading the Firestore user document.
- */
-
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { Capacitor } from '@capacitor/core'
-import { doc, setDoc, getDoc } from 'firebase/firestore'
+import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '../services/firebase'
 import {
   initPurchases,
@@ -26,56 +11,42 @@ import {
   restorePurchases,
   getPremiumPackages,
 } from '../services/purchaseService'
-import useAuthStore from './useAuthStore'
 
-/** Write isPremium flag to Firestore user doc (for cross-platform sync). */
-async function syncPremiumToFirestore(isPremium) {
-  const uid = useAuthStore.getState().firebaseUser?.uid
-  if (!uid) return
-  try {
-    await setDoc(doc(db, 'users', uid), { isPremium }, { merge: true })
-    console.log('[Premium] synced isPremium =', isPremium, 'to Firestore')
-  } catch (err) {
-    console.warn('[Premium] Firestore sync failed:', err?.message)
-  }
-}
+const ACTIVATION_TIMEOUT_MS = 10_000
 
 const usePremiumStore = create(
   persist(
     (set, get) => ({
       isPremium:       false,
       loading:         false,
-      offerings:       null,   // RevenueCat offering (full, contains all packages)
-      premiumPackages: [],     // Filtered premium subscription packages
+      activating:      false,
+      offerings:       null,
+      premiumPackages: [],
+      _unsubscribe:    null,
 
-      /**
-       * Initialize RevenueCat and check current entitlement status.
-       * On web (non-native), falls back to Firestore user document.
-       * Call once after Firebase auth is ready.
-       */
       init: async (userId) => {
+        get()._listenToFirestore(userId)
+
         if (Capacitor.isNativePlatform()) {
-          // Native: RevenueCat is the source of truth
           await initPurchases(userId)
           const premium = await checkPremiumStatus()
           set({ isPremium: premium })
-          // Keep Firestore in sync whenever we verify on native
-          if (premium) syncPremiumToFirestore(true)
-        } else {
-          // Web: read from Firestore (RC not available)
-          try {
-            const snap = await getDoc(doc(db, 'users', userId))
-            const premium = snap.exists() ? (snap.data().isPremium === true) : false
-            set({ isPremium: premium })
-          } catch (err) {
-            console.warn('[Premium] Firestore read failed:', err?.message)
-          }
         }
       },
 
-      /**
-       * Load available purchase packages for display.
-       */
+      _listenToFirestore: (userId) => {
+        const prev = get()._unsubscribe
+        if (prev) prev()
+
+        const unsub = onSnapshot(doc(db, 'users', userId), (snap) => {
+          if (!snap.exists()) return
+          const data = snap.data()
+          const premium = data.isPremium === true
+          set({ isPremium: premium, activating: false })
+        })
+        set({ _unsubscribe: unsub })
+      },
+
       loadOfferings: async () => {
         set({ loading: true })
         const offerings = await getOfferings()
@@ -83,18 +54,15 @@ const usePremiumStore = create(
         set({ offerings, premiumPackages, loading: false })
       },
 
-      /**
-       * Purchase a premium subscription package.
-       * @param {object} pkg — RevenueCat package from premiumPackages
-       * @returns {{ granted: boolean, diamonds: number }}
-       */
       purchase: async (pkg) => {
         set({ loading: true })
         try {
           const result = await purchasePremium(pkg)
           if (result.granted) {
-            set({ isPremium: true })
-            syncPremiumToFirestore(true)
+            set({ activating: true })
+            setTimeout(() => {
+              if (get().activating) set({ activating: false })
+            }, ACTIVATION_TIMEOUT_MS)
           }
           return result
         } finally {
@@ -102,17 +70,22 @@ const usePremiumStore = create(
         }
       },
 
-      /**
-       * Restore previous purchases.
-       * @returns {{ granted: boolean, diamonds: number }}
-       *   diamonds is always 0 on restore (already granted at purchase time)
-       */
+      reset: () => {
+        const unsub = get()._unsubscribe
+        if (unsub) unsub()
+        set({ isPremium: false, loading: false, activating: false, offerings: null, premiumPackages: [], _unsubscribe: null })
+      },
+
       restore: async () => {
         set({ loading: true })
         try {
           const result = await restorePurchases()
-          set({ isPremium: result.granted })
-          if (result.granted) syncPremiumToFirestore(true)
+          if (result.granted) {
+            set({ activating: true })
+            setTimeout(() => {
+              if (get().activating) set({ activating: false })
+            }, ACTIVATION_TIMEOUT_MS)
+          }
           return result
         } finally {
           set({ loading: false })
