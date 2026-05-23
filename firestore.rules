@@ -19,7 +19,7 @@ service cloud.firestore {
                     && request.auth.uid == userId
                     && !request.resource.data.diff(resource.data)
                          .affectedKeys()
-                         .hasAny(['isPremium', 'premiumProductId', 'premiumUpdatedAt', 'diamonds']);
+                         .hasAny(['isPremium', 'premiumProductId', 'premiumUpdatedAt']);
     }
 
     // ── Webhook idempotency (server-only) ────────────────────────────────────
