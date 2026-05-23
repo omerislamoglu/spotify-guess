@@ -161,11 +161,12 @@ export default function ShopModal({ onClose }) {
     try {
       const { purchased, diamonds: diamondCount } = await purchaseDiamonds(rcPkg)
       if (purchased && diamondCount > 0) {
-        // Diamonds are credited server-side via RevenueCat webhook.
-        // Re-fetch balances so the UI updates once the webhook processes.
-        toast.success(t('shop_diamonds_purchased', { count: diamondCount }))
         const uid = useAuthStore.getState().firebaseUser?.uid
-        if (uid) useEnergyStore.getState().loadEnergy(uid)
+        if (uid) {
+          await useEnergyStore.getState().addDiamonds(uid, diamondCount)
+          await useEnergyStore.getState().loadEnergy(uid)
+        }
+        toast.success(t('shop_diamonds_purchased', { count: diamondCount }))
       } else if (!purchased) {
         // User cancelled — no toast needed
       }
