@@ -101,11 +101,14 @@ export async function joinRoom(code, player) {
 
   if (snap.empty) throw new Error('No room found with that code.')
 
-  const roomDoc = snap.docs[0]
-  const room    = roomDoc.data()
+  // Find the active lobby room — old finished rooms may share the same code
+  const roomDoc = snap.docs.find(d => d.data().phase === 'lobby')
+  if (!roomDoc) {
+    const hasPlaying = snap.docs.some(d => d.data().phase === 'playing')
+    throw new Error(hasPlaying ? 'This game has already started.' : 'No room found with that code.')
+  }
 
-  if (room.phase !== 'lobby') throw new Error('This game has already started.')
-
+  const room      = roomDoc.data()
   const alreadyIn = room.players.some(p => p.uid === player.uid)
   if (!alreadyIn) {
     await updateDoc(roomDoc.ref, { players: arrayUnion(buildPlayerEntry(player)) })
