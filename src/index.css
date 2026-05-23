@@ -77,6 +77,18 @@
     background: #121212;
   }
 
+  html::before {
+    content: '';
+    position: fixed;
+    top: -200px;
+    left: -200px;
+    right: -200px;
+    bottom: -200px;
+    background: #121212;
+    z-index: -1;
+    pointer-events: none;
+  }
+
   body {
     touch-action: manipulation;
     position: fixed;
