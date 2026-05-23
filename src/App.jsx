@@ -75,6 +75,7 @@ export default function App() {
       initPremium(firebaseUser.uid)
       loadEnergy(firebaseUser.uid)
     }
+    return () => { usePremiumStore.getState().reset() }
   }, [firebaseUser?.uid, initPremium, loadEnergy])
 
   return (

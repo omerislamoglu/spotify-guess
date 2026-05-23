@@ -352,7 +352,7 @@ export default function Dashboard() {
   const displayName = spotifyProfile?.displayName ?? firebaseUser?.displayName ?? 'there'
 
   const player = {
-    uid:         firebaseUser.uid,
+    uid:         firebaseUser?.uid,
     displayName: displayName,
     avatarUrl:   spotifyProfile?.photoURL ?? firebaseUser?.photoURL ?? null,
     isPremium,

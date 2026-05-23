@@ -23,6 +23,7 @@ const usePremiumStore = create(
       offerings:       null,
       premiumPackages: [],
       _unsubscribe:    null,
+      _activationTimer: null,
 
       init: async (userId) => {
         get()._listenToFirestore(userId)
@@ -49,9 +50,14 @@ const usePremiumStore = create(
 
       loadOfferings: async () => {
         set({ loading: true })
-        const offerings = await getOfferings()
-        const premiumPackages = getPremiumPackages(offerings)
-        set({ offerings, premiumPackages, loading: false })
+        try {
+          const offerings = await getOfferings()
+          const premiumPackages = getPremiumPackages(offerings)
+          set({ offerings, premiumPackages, loading: false })
+        } catch (err) {
+          console.warn('[premiumStore] loadOfferings failed:', err.message)
+          set({ loading: false })
+        }
       },
 
       purchase: async (pkg) => {
@@ -59,10 +65,11 @@ const usePremiumStore = create(
         try {
           const result = await purchasePremium(pkg)
           if (result.granted) {
-            set({ activating: true })
-            setTimeout(() => {
-              if (get().activating) set({ activating: false })
+            if (get()._activationTimer) clearTimeout(get()._activationTimer)
+            const timer = setTimeout(() => {
+              if (get().activating) set({ activating: false, _activationTimer: null })
             }, ACTIVATION_TIMEOUT_MS)
+            set({ activating: true, _activationTimer: timer })
           }
           return result
         } finally {
@@ -73,7 +80,8 @@ const usePremiumStore = create(
       reset: () => {
         const unsub = get()._unsubscribe
         if (unsub) unsub()
-        set({ isPremium: false, loading: false, activating: false, offerings: null, premiumPackages: [], _unsubscribe: null })
+        if (get()._activationTimer) clearTimeout(get()._activationTimer)
+        set({ isPremium: false, loading: false, activating: false, offerings: null, premiumPackages: [], _unsubscribe: null, _activationTimer: null })
       },
 
       restore: async () => {
@@ -81,10 +89,11 @@ const usePremiumStore = create(
         try {
           const result = await restorePurchases()
           if (result.granted) {
-            set({ activating: true })
-            setTimeout(() => {
-              if (get().activating) set({ activating: false })
+            if (get()._activationTimer) clearTimeout(get()._activationTimer)
+            const timer = setTimeout(() => {
+              if (get().activating) set({ activating: false, _activationTimer: null })
             }, ACTIVATION_TIMEOUT_MS)
+            set({ activating: true, _activationTimer: timer })
           }
           return result
         } finally {

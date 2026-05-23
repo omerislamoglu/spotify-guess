@@ -22,6 +22,10 @@ export async function shareRoom(code) {
     return
   }
 
-  await navigator.clipboard.writeText(url)
-  toast.success(t('share_link_copied'))
+  try {
+    await navigator.clipboard.writeText(url)
+    toast.success(t('share_link_copied'))
+  } catch {
+    toast.error(t('error_generic'))
+  }
 }

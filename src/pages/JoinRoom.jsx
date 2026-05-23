@@ -21,7 +21,7 @@ export default function JoinRoom() {
   const displayName = spotifyProfile?.displayName ?? firebaseUser?.displayName ?? 'Player'
 
   const player = {
-    uid:         firebaseUser.uid,
+    uid:         firebaseUser?.uid,
     displayName,
     avatarUrl:   spotifyProfile?.photoURL ?? firebaseUser?.photoURL ?? null,
     isPremium,
@@ -46,10 +46,16 @@ export default function JoinRoom() {
         return
       }
 
-      const roomId = await joinRoom(code.trim().toUpperCase(), player)
-      if (roomId) {
-        navigate(`/room/${roomId}`, { replace: true })
-      } else {
+      try {
+        const roomId = await joinRoom(code.trim().toUpperCase(), player)
+        if (roomId) {
+          navigate(`/room/${roomId}`, { replace: true })
+        } else {
+          await addEnergy(costPerGame)
+          toast.error(t('join_room_not_found'))
+          navigate('/dashboard', { replace: true })
+        }
+      } catch {
         await addEnergy(costPerGame)
         toast.error(t('join_room_not_found'))
         navigate('/dashboard', { replace: true })

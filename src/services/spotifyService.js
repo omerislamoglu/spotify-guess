@@ -323,6 +323,8 @@ export async function fetchLikedTracks(accessToken, limit = 500) {
  * @returns {Promise<string|null>} preview URL, or null if nothing found
  */
 export async function fetchDeezerPreview(artist, trackName) {
+  // Deezer API doesn't support CORS — only works on native (Capacitor)
+  if (!Capacitor.isNativePlatform()) return null
   try {
     const q = `track:"${trackName}" artist:"${artist}"`
     const url = `https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=1`

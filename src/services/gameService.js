@@ -51,7 +51,7 @@ const ROOMS = 'rooms'
  * Max tracks taken from each player's playlist when building the round pool.
  * Ensures a 2000-track playlist doesn't crowd out a 30-track one.
  */
-export const MAX_TRACKS_PER_PLAYER = 500
+export const MAX_TRACKS_PER_PLAYER = 50
 export const ROUND_COUNT           = 5
 export const POINTS_CORRECT_GUESS  = 100
 export const POINTS_WRONG_GUESS   = -50
@@ -180,6 +180,7 @@ export async function startGame(roomId, rounds) {
     currentRound: 0,
     phase:        'playing',
     scores:       {},
+    playerPlaylists: {},
   })
 }
 
