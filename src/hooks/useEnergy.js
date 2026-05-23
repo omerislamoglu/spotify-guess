@@ -31,6 +31,7 @@ export default function useEnergy() {
   const diamonds         = useEnergyStore(s => s.diamonds)
   const gold             = useEnergyStore(s => s.gold)
   const energyDepletedAt = useEnergyStore(s => s.energyDepletedAt)
+  const energyLoaded     = useEnergyStore(s => s.energyLoaded)
   const loading          = useEnergyStore(s => s.loading)
   const consume          = useEnergyStore(s => s.consumeEnergy)
   const refill           = useEnergyStore(s => s.refillEnergy)
@@ -54,6 +55,7 @@ export default function useEnergy() {
     gold,
     isPremium,
     canPlay:     energy >= ENERGY_PER_GAME,
+    energyLoaded,
     loading,
     energyDepletedAt,
     refillAt,

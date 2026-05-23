@@ -35,6 +35,7 @@ const useEnergyStore = create((set, get) => ({
   diamonds:         0,
   gold:             0,
   energyDepletedAt: null,   // epoch ms — when energy hit 0 (null = not depleted)
+  energyLoaded:     false,  // true once Firestore energy data has been fetched
   loading:          false,
 
   // ── Load ───────────────────────────────────────────────────────────────────
@@ -46,9 +47,10 @@ const useEnergyStore = create((set, get) => ({
   loadEnergy: async (uid) => {
     try {
       const { energy, diamonds, gold, energyDepletedAt } = await fetchEnergy(uid)
-      set({ energy, diamonds, gold, energyDepletedAt })
+      set({ energy, diamonds, gold, energyDepletedAt, energyLoaded: true })
     } catch (err) {
       console.warn('[energyStore] loadEnergy failed:', err.message)
+      set({ energyLoaded: true })
     }
   },
 

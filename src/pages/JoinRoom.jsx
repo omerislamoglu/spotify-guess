@@ -16,7 +16,7 @@ export default function JoinRoom() {
   const { firebaseUser, spotifyProfile } = useAuthStore()
   const { joinRoom } = useGameStore()
   const isPremium = usePremiumStore(s => s.isPremium)
-  const { canPlay, costPerGame, consumeEnergy, addEnergy } = useEnergy()
+  const { canPlay, costPerGame, consumeEnergy, addEnergy, energyLoaded } = useEnergy()
 
   const displayName = spotifyProfile?.displayName ?? firebaseUser?.displayName ?? 'Player'
 
@@ -28,7 +28,7 @@ export default function JoinRoom() {
   }
 
   useEffect(() => {
-    if (!code || joining) return
+    if (!code || joining || !energyLoaded) return
 
     const doJoin = async () => {
       setJoining(true)
@@ -63,7 +63,7 @@ export default function JoinRoom() {
     }
 
     doJoin()
-  }, [code]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [code, energyLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 px-4">
