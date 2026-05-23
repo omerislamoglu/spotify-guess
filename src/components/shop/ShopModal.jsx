@@ -162,15 +162,29 @@ export default function ShopModal({ onClose }) {
       const { purchased, diamonds: diamondCount } = await purchaseDiamonds(rcPkg)
       if (purchased && diamondCount > 0) {
         const uid = useAuthStore.getState().firebaseUser?.uid
-        if (uid) {
-          try {
-            const newTotal = await useEnergyStore.getState().addDiamonds(uid, diamondCount)
-            console.log('[Shop] Diamonds credited:', diamondCount, 'new total:', newTotal)
-          } catch (creditErr) {
-            console.error('[Shop] Failed to credit diamonds:', creditErr)
-          }
-        }
         toast.success(t('shop_diamonds_purchased', { count: diamondCount }))
+
+        // Webhook credits diamonds server-side. Reload after a delay to sync.
+        if (uid) {
+          const before = useEnergyStore.getState().diamonds
+          setTimeout(async () => {
+            await useEnergyStore.getState().loadEnergy(uid)
+            // Fallback: if webhook hasn't credited yet, credit client-side
+            if (useEnergyStore.getState().diamonds <= before) {
+              setTimeout(async () => {
+                await useEnergyStore.getState().loadEnergy(uid)
+                if (useEnergyStore.getState().diamonds <= before) {
+                  try {
+                    await useEnergyStore.getState().addDiamonds(uid, diamondCount)
+                    console.log('[Shop] Fallback: credited diamonds client-side:', diamondCount)
+                  } catch (err) {
+                    console.error('[Shop] Fallback credit failed:', err)
+                  }
+                }
+              }, 3000)
+            }
+          }, 2000)
+        }
       } else if (!purchased) {
         // User cancelled — no toast needed
       }
