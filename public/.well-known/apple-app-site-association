@@ -3,9 +3,14 @@
     "apps": [],
     "details": [
       {
-        "appID": "TEAM_ID.com.spotifyguess.app",
-        "paths": ["/join/*"]
+        "appIDs": ["5N3B79D8SX.com.spotifyguess.app"],
+        "components": [
+          { "/": "/join/*" }
+        ]
       }
     ]
+  },
+  "webcredentials": {
+    "apps": ["5N3B79D8SX.com.spotifyguess.app"]
   }
 }
