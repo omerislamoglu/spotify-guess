@@ -163,8 +163,12 @@ export default function ShopModal({ onClose }) {
       if (purchased && diamondCount > 0) {
         const uid = useAuthStore.getState().firebaseUser?.uid
         if (uid) {
-          await useEnergyStore.getState().addDiamonds(uid, diamondCount)
-          await useEnergyStore.getState().loadEnergy(uid)
+          try {
+            const newTotal = await useEnergyStore.getState().addDiamonds(uid, diamondCount)
+            console.log('[Shop] Diamonds credited:', diamondCount, 'new total:', newTotal)
+          } catch (creditErr) {
+            console.error('[Shop] Failed to credit diamonds:', creditErr)
+          }
         }
         toast.success(t('shop_diamonds_purchased', { count: diamondCount }))
       } else if (!purchased) {
