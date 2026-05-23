@@ -16,6 +16,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         } catch {
             print("Audio session setup failed: \(error)")
         }
+        window?.backgroundColor = UIColor(red: 18/255, green: 18/255, blue: 18/255, alpha: 1)
+
         return true
     }
 
