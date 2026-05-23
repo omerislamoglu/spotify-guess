@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Share2, Check, Crown, Home } from 'lucide-react'
+import { Capacitor } from '@capacitor/core'
 import toast from 'react-hot-toast'
 import useGameStore from '../store/useGameStore'
 import useAuthStore from '../store/useAuthStore'
@@ -632,19 +633,28 @@ export default function Room() {
   // ── Firestore subscription ────────────────────────────────────────────────
   useEffect(() => {
     _subscribe(roomId)
-    return () => leaveRoom()
+    return () => {
+      const { _unsubscribe, _autoTimers } = useGameStore.getState()
+      if (_unsubscribe) _unsubscribe()
+      for (const timer of _autoTimers.values()) clearTimeout(timer)
+      useGameStore.setState({
+        _unsubscribe: null,
+        _autoRevealRounds: new Set(),
+        _autoAdvanceRounds: new Set(),
+        _autoTimers: new Map(),
+      })
+    }
   }, [roomId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Cleanup on tab/browser close ───────────────────────────────────────
-  // beforeunload handlers are synchronous — we can't await async ops.
-  // Fire the Firestore write and move on; best-effort.
-  // Reliable cleanup for abandoned rooms should rely on TTL-based server cleanup.
+  // ── Cleanup on tab/browser close (web only) ────────────────────────────
+  // On native (Capacitor), beforeunload fires when the app goes to background,
+  // which would incorrectly remove the player from the room.
   useEffect(() => {
+    if (Capacitor.isNativePlatform()) return
     const handleBeforeUnload = () => {
       const { room: currentRoom } = useGameStore.getState()
       const { firebaseUser: currentUser } = useAuthStore.getState()
       if (currentRoom?.id && currentUser?.uid) {
-        // Fire-and-forget — browser may kill the page before this completes
         fsLeaveRoom(currentRoom.id, currentUser.uid)
       }
     }
