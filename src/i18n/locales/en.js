@@ -210,6 +210,7 @@ export default {
   // ── Lobby return / Energy ─────────────────────────────────────────────────
   audio_tap_to_play: 'Tap to play',
   back_to_lobby: 'Back to Lobby',
+  game_back_to_menu: 'Back to Menu',
   waiting_host_lobby: 'Waiting for the host to start a new round...',
   preparing_tracks: 'Preparing tracks...',
   insufficient_previews: "{name}'s playlist doesn't have enough playable tracks (min {min}).",

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Share2, Check, Crown } from 'lucide-react'
+import { Share2, Check, Crown, Home } from 'lucide-react'
 import toast from 'react-hot-toast'
 import useGameStore from '../store/useGameStore'
 import useAuthStore from '../store/useAuthStore'
@@ -591,6 +591,18 @@ function FinishedView({ room, isHost }) {
         {!isHost && (
           <p className="text-center text-sm text-muted">{t('waiting_host_lobby')}</p>
         )}
+
+        <Button
+          variant="ghost"
+          className="w-full"
+          onClick={() => {
+            useGameStore.getState().leaveRoom()
+            navigate('/dashboard', { replace: true })
+          }}
+        >
+          <Home size={16} />
+          {t('game_back_to_menu')}
+        </Button>
 
         {lowEnergy && (
           <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 px-4 py-3 text-center space-y-2">

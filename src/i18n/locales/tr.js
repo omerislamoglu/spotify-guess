@@ -210,6 +210,7 @@ export default {
   // ── Lobby return / Energy ─────────────────────────────────────────────────
   audio_tap_to_play: 'Çalmak için ekrana dokun',
   back_to_lobby: 'Lobiye Dön',
+  game_back_to_menu: 'Ana Menüye Dön',
   waiting_host_lobby: 'Ev sahibinin yeni tur başlatması bekleniyor...',
   preparing_tracks: 'Şarkılar hazırlanıyor...',
   insufficient_previews: '{name} listesinde yeterli oynatılabilir şarkı yok (min {min}).',
