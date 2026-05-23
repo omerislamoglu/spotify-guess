@@ -136,12 +136,20 @@ export default function ShopModal({ onClose }) {
   }, [offerings, loadOfferings])
 
   // Map RevenueCat packages to our local DIAMOND_PACKAGES by product identifier
+  // Supports both "echoguess_diamonds_50" and "diamonds_50" formats
+  const DIAMOND_PRODUCT_MAP_LOCAL = {
+    'echoguess_diamonds_50':  'diamonds_50',
+    'echoguess_diamonds_120': 'diamonds_120',
+    'echoguess_diamonds_300': 'diamonds_300',
+    'diamonds_50':            'diamonds_50',
+    'diamonds_120':           'diamonds_120',
+    'diamonds_300':           'diamonds_300',
+  }
   const rcPkgMap = {}
   for (const rc of rcDiamondPkgs) {
     const prodId = rc.product?.identifier ?? ''
-    // e.g. "echoguess_diamonds_50" → "diamonds_50"
-    const localId = prodId.replace('echoguess_', '')
-    rcPkgMap[localId] = rc
+    const localId = DIAMOND_PRODUCT_MAP_LOCAL[prodId]
+    if (localId) rcPkgMap[localId] = rc
   }
 
   const handleBuyDiamonds = async (localPkg, rcPkg) => {

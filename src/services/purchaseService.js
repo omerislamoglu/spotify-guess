@@ -37,6 +37,9 @@ const DIAMOND_PRODUCT_MAP = {
   'echoguess_diamonds_50':  'diamonds_50',
   'echoguess_diamonds_120': 'diamonds_120',
   'echoguess_diamonds_300': 'diamonds_300',
+  'diamonds_50':            'diamonds_50',
+  'diamonds_120':           'diamonds_120',
+  'diamonds_300':           'diamonds_300',
 }
 
 let initialized = false
@@ -192,16 +195,18 @@ export async function purchaseDiamonds(pkg) {
     return { purchased: false, internalId: null, diamonds: 0 }
   }
 
+  const productId = pkg.product?.identifier ?? ''
+  const internalId = DIAMOND_PRODUCT_MAP[productId] ?? null
+
+  // Safety: reject if this package is actually a premium subscription
+  if (!internalId || PREMIUM_PRODUCT_MAP[productId] != null) {
+    console.error('[RC] purchaseDiamonds called with non-diamond package:', productId)
+    return { purchased: false, internalId: null, diamonds: 0 }
+  }
+
   try {
     const { customerInfo } = await Purchases.purchasePackage({ aPackage: pkg })
 
-    // Find which diamond product was purchased
-    const allPurchasedIds = customerInfo.allPurchasedProductIdentifiers ?? []
-    const productId = pkg.product?.identifier ?? ''
-
-    const internalId = DIAMOND_PRODUCT_MAP[productId] ?? null
-
-    // Determine diamond count from the product identifier
     const diamondCounts = {
       'diamonds_50':  50,
       'diamonds_120': 120,
@@ -240,17 +245,12 @@ export function getDiamondPackages(offering) {
 export function getPremiumPackages(offering) {
   if (!offering?.availablePackages) return []
 
-  // Primary: packages whose product ID is explicitly mapped
   const mapped = offering.availablePackages.filter(
     pkg => PREMIUM_PRODUCT_MAP[pkg.product?.identifier] != null
   )
-  if (mapped.length > 0) return mapped
-
-  // Fallback: any package that isn't a known diamond consumable.
-  // Handles cases where product IDs in RC don't match PREMIUM_PRODUCT_MAP yet.
-  console.warn('[RC] No packages matched PREMIUM_PRODUCT_MAP — falling back to non-diamond packages.',
-    'Found IDs:', offering.availablePackages.map(p => p.product?.identifier))
-  return offering.availablePackages.filter(
-    pkg => DIAMOND_PRODUCT_MAP[pkg.product?.identifier] == null
-  )
+  if (mapped.length === 0) {
+    console.warn('[RC] No packages matched PREMIUM_PRODUCT_MAP.',
+      'Found IDs:', offering.availablePackages.map(p => p.product?.identifier))
+  }
+  return mapped
 }
